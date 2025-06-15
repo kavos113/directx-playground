@@ -6,7 +6,9 @@
 #endif
 
 #include <windows.h>
-#include <d2d1.h>
+#include <d2d1_1.h>
+#include <d3d11.h>
+#include <dxgi1_6.h>
 #include <wrl/client.h>
 
 class Application
@@ -28,12 +30,17 @@ private:
     void onPaint();
     void onResize();
 
+    void createBitmap();
+
     HWND m_hwnd;
 
     const wchar_t* className = L"ApplicationWindowClass";
 
-    Microsoft::WRL::ComPtr<ID2D1Factory> m_d2dFactory;
-    Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> m_renderTarget;
+    Microsoft::WRL::ComPtr<ID2D1Factory1> m_d2dFactory;
+    Microsoft::WRL::ComPtr<ID2D1Device> m_d2dDevice;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_d2dContext;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> m_swapChain;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> m_bitmap;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_brush;
 };
 

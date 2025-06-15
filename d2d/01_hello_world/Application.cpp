@@ -64,7 +64,8 @@ void Application::onResize()
         GetClientRect(m_hwnd, &rc);
 
         D2D1_SIZE_U size = D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top);
-        if (FAILED(m_renderTarget->Resize(size)))
+        HRESULT hr = m_renderTarget->Resize(size);
+        if (FAILED(hr))
         {
             m_renderTarget.Reset();
             m_brush.Reset();
