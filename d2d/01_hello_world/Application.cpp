@@ -2,7 +2,11 @@
 
 void Application::initD2D()
 {
-    if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, m_d2dFactory.GetAddressOf())))
+    HRESULT hr = D2D1CreateFactory(
+        D2D1_FACTORY_TYPE_SINGLE_THREADED,
+        m_d2dFactory.GetAddressOf()
+    );
+    if (FAILED(hr))
     {
         MessageBox(nullptr, L"Failed to create D2D factory", L"Error", MB_OK | MB_ICONERROR);
         return;
@@ -13,17 +17,20 @@ void Application::initD2D()
 
     D2D1_SIZE_U size = D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top);
 
-    if (FAILED(m_d2dFactory->CreateHwndRenderTarget(
-            D2D1::RenderTargetProperties(),
-            D2D1::HwndRenderTargetProperties(m_hwnd, size),
-            m_renderTarget.GetAddressOf())))
+    hr = m_d2dFactory->CreateHwndRenderTarget(
+        D2D1::RenderTargetProperties(),
+        D2D1::HwndRenderTargetProperties(m_hwnd, size),
+        m_renderTarget.GetAddressOf()
+    );
+    if (FAILED(hr))
     {
         MessageBox(nullptr, L"Failed to create render target", L"Error", MB_OK | MB_ICONERROR);
         return;
     }
 
     D2D1_COLOR_F color = D2D1::ColorF(D2D1::ColorF::Green);
-    if (FAILED(m_renderTarget->CreateSolidColorBrush(color, m_brush.GetAddressOf())))
+    hr = m_renderTarget->CreateSolidColorBrush(color, m_brush.GetAddressOf());
+    if (FAILED(hr))
     {
         MessageBox(nullptr, L"Failed to create solid color brush", L"Error", MB_OK | MB_ICONERROR);
         return;
@@ -39,7 +46,8 @@ void Application::onPaint()
     m_renderTarget->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
     m_renderTarget->FillRectangle(D2D1::RectF(100, 100, 300, 300), m_brush.Get());
 
-    if (FAILED(m_renderTarget->EndDraw()))
+    HRESULT hr = m_renderTarget->EndDraw();
+    if (FAILED(hr))
     {
         m_renderTarget.Reset();
         m_brush.Reset();
