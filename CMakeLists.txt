@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.30)
+project(Win32D2DExamples)
+
 add_subdirectory(win32/01_hello_world)
 add_subdirectory(win32/02_split_class)
 
