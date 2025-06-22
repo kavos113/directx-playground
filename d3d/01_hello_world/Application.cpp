@@ -19,6 +19,12 @@ Application::Application()
 
 Application::~Application()
 {
+    if (m_engine)
+    {
+        m_engine->cleanup();
+        m_engine.reset();
+    }
+
     if (m_hwnd)
     {
         DestroyWindow(m_hwnd);
@@ -46,6 +52,8 @@ int Application::createWindow(int x, int y, int width, int height)
     {
         return -1;
     }
+
+    m_engine = std::make_unique<D3DEngine>(m_hwnd);
 
     ShowWindow(m_hwnd, SW_SHOW);
     UpdateWindow(m_hwnd);
@@ -94,6 +102,10 @@ LRESULT Application::handleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
     case WM_DESTROY:
         PostQuitMessage(0);
+        return 0;
+
+    case WM_PAINT:
+        m_engine->render();
         return 0;
 
     default:

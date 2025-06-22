@@ -8,3 +8,4 @@ add_executable(d3d_01_hello_world
         Application.cpp
         D3DEngine.cpp
 )
+target_link_libraries(d2d_01_hello_world PRIVATE d3d12 dxgi d3dcompiler)

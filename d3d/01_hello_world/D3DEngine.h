@@ -9,7 +9,7 @@
 class D3DEngine
 {
 public:
-    D3DEngine(HWND hwnd);
+    explicit D3DEngine(HWND hwnd);
     ~D3DEngine();
 
     void cleanup();
