@@ -208,8 +208,8 @@ void D3DEngine::createSwapChain(HWND hwnd)
     GetClientRect(hwnd, &rc);
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {
-        .Width = rc.right - rc.left,
-        .Height = rc.bottom - rc.top,
+        .Width = static_cast<UINT>(rc.right - rc.left),
+        .Height = static_cast<UINT>(rc.bottom - rc.top),
         .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
         .Stereo = FALSE,
         .SampleDesc = {1, 0},
