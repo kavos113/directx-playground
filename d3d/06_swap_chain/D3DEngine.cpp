@@ -233,6 +233,8 @@ void D3DEngine::createSwapChain(HWND hwnd)
         std::cerr << "Failed to create swap chain." << std::endl;
         return;
     }
+
+    createSwapChainResources();
 }
 
 void D3DEngine::createSwapChainResources()
