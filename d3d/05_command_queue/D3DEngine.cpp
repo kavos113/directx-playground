@@ -11,6 +11,7 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     createDXGIFactory();
     createDevice();
+    createCommandResources();
 }
 
 D3DEngine::~D3DEngine() = default;

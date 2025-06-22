@@ -11,6 +11,8 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     createDXGIFactory();
     createDevice();
+    createCommandResources();
+    createSwapChain(hwnd);
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -196,6 +198,36 @@ void D3DEngine::createCommandResources()
     if (FAILED(hr))
     {
         std::cerr << "Failed to create command queue." << std::endl;
+        return;
+    }
+}
+
+void D3DEngine::createSwapChain(HWND hwnd)
+{
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {
+        .Width = 800,
+        .Height = 600,
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .Stereo = FALSE,
+        .SampleDesc = {1, 0},
+        .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        .BufferCount = 2,
+        .Scaling = DXGI_SCALING_STRETCH,
+        .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
+        .Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+    };
+    HRESULT hr = m_dxgiFactory->CreateSwapChainForHwnd(
+        m_commandQueue.Get(),
+        hwnd,
+        &swapChainDesc,
+        nullptr,
+        nullptr,
+        reinterpret_cast<IDXGISwapChain1**>(m_swapchain.GetAddressOf())
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create swap chain." << std::endl;
         return;
     }
 }
