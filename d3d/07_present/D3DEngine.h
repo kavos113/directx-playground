@@ -31,6 +31,7 @@ private:
     void createCommandResources();
     void createSwapChain(HWND hwnd);
     void createSwapChainResources();
+    void createFence();
 
     static constexpr UINT FRAME_COUNT = 2;
 
@@ -43,6 +44,10 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
+    UINT64 m_fenceValue = 0;
+    HANDLE m_fenceEvent = nullptr;
 };
 
 

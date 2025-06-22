@@ -13,6 +13,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createDevice();
     createCommandResources();
     createSwapChain(hwnd);
+    createFence();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -276,5 +277,33 @@ void D3DEngine::createSwapChainResources()
         rtvHandle.ptr += i * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
         m_device->CreateRenderTargetView(m_backBuffers[i].Get(), nullptr, rtvHandle);
+    }
+}
+
+void D3DEngine::createFence()
+{
+    HRESULT hr = m_device->CreateFence(
+        0,
+        D3D12_FENCE_FLAG_NONE,
+        IID_PPV_ARGS(&m_fence)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create fence." << std::endl;
+        return;
+    }
+
+    m_fenceValue = 0;
+
+    m_fenceEvent = CreateEvent(
+        nullptr,
+        FALSE,
+        FALSE,
+        nullptr
+    );
+    if (!m_fenceEvent)
+    {
+        std::cerr << "Failed to create fence event." << std::endl;
+        return;
     }
 }
