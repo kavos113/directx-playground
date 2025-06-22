@@ -157,3 +157,45 @@ void D3DEngine::createDevice()
         std::cerr << "Failed to create D3D12 device." << std::endl;
     }
 }
+
+void D3DEngine::createCommandResources()
+{
+    HRESULT hr = m_device->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        IID_PPV_ARGS(&m_commandAllocator)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_device->CreateCommandList(
+        0,
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        m_commandAllocator.Get(),
+        nullptr,
+        IID_PPV_ARGS(&m_commandList)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create command list." << std::endl;
+        return;
+    }
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {
+        .Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
+        .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
+        .NodeMask = 0
+    };
+    hr = m_device->CreateCommandQueue(
+        &queueDesc,
+        IID_PPV_ARGS(&m_commandQueue)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create command queue." << std::endl;
+        return;
+    }
+}
