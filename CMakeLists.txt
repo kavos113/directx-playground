@@ -6,3 +6,4 @@ add_subdirectory(win32/02_split_class)
 
 add_subdirectory(d2d/01_hello_world)
 add_subdirectory(d2d/02_device_context)
+add_subdirectory(d2d/03_draw_primitive_geometry)

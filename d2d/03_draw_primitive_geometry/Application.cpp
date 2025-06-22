@@ -120,15 +120,7 @@ void Application::initD2D()
 
     createSurfaceBitmap();
 
-    hr = m_d2dContext->CreateSolidColorBrush(
-        D2D1::ColorF(D2D1::ColorF::Red),
-        &m_brush
-    );
-    if (FAILED(hr))
-    {
-        MessageBox(nullptr, L"Failed to create D2D solid color brush", L"Error", MB_OK | MB_ICONERROR);
-        return;
-    }
+    createResources();
 }
 
 void Application::createSurfaceBitmap()
@@ -160,6 +152,51 @@ void Application::createSurfaceBitmap()
     m_d2dContext->SetTarget(m_bitmap.Get());
 }
 
+void Application::createResources()
+{
+    HRESULT hr = m_d2dContext->CreateSolidColorBrush(
+        D2D1::ColorF(D2D1::ColorF::Red),
+        &m_brush
+    );
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D solid color brush", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    hr = m_d2dContext->CreateSolidColorBrush(
+        D2D1::ColorF(D2D1::ColorF::Green),
+        &m_greenBrush
+    );
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D green brush", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    D2D1_STROKE_STYLE_PROPERTIES strokeStyleProperties = {
+        .startCap = D2D1_CAP_STYLE_ROUND,
+        .endCap = D2D1_CAP_STYLE_SQUARE,
+        .dashCap = D2D1_CAP_STYLE_TRIANGLE,
+        .lineJoin = D2D1_LINE_JOIN_MITER,
+        .miterLimit = 10.0f,
+        .dashStyle = D2D1_DASH_STYLE_CUSTOM,
+        .dashOffset = 0.0f,
+    };
+    std::array dashes = { 5.0f, 2.0f };
+    hr = m_d2dFactory->CreateStrokeStyle(
+        &strokeStyleProperties,
+        dashes.data(),
+        dashes.size(),
+        &m_strokeStyle
+    );
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D stroke style", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+}
+
 void Application::onPaint()
 {
     PAINTSTRUCT ps;
@@ -167,7 +204,32 @@ void Application::onPaint()
 
     m_d2dContext->BeginDraw();
     m_d2dContext->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
+
     m_d2dContext->FillRectangle(D2D1::RectF(100, 100, 300, 300), m_brush.Get());
+    m_d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(400, 200), 50, 50), m_brush.Get());
+    m_d2dContext->FillRoundedRectangle(
+        D2D1::RoundedRect(D2D1::RectF(500, 100, 700, 300), 40, 20),
+        m_brush.Get()
+    );
+    m_d2dContext->DrawLine(
+        D2D1::Point2F(100, 400),
+        D2D1::Point2F(300, 600),
+        m_brush.Get(),
+        15.0f,
+        m_strokeStyle.Get()
+    );
+    m_d2dContext->DrawRectangle(
+        D2D1::RectF(400, 400, 600, 600),
+        m_greenBrush.Get(),
+        10.0f,
+        m_strokeStyle.Get()
+    );
+    m_d2dContext->DrawEllipse(
+        D2D1::Ellipse(D2D1::Point2F(700, 500), 50, 50),
+        m_greenBrush.Get(),
+        3.0f,
+        m_strokeStyle.Get()
+    );
 
     if (FAILED(m_d2dContext->EndDraw()))
     {

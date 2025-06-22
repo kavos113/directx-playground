@@ -31,6 +31,7 @@ private:
     void onResize();
 
     void createSurfaceBitmap();
+    void createResources();
 
     HWND m_hwnd;
 
@@ -42,6 +43,8 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain1> m_swapChain;
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> m_bitmap;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_brush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_greenBrush;
+    Microsoft::WRL::ComPtr<ID2D1StrokeStyle> m_strokeStyle;
 };
 
 
