@@ -24,9 +24,11 @@ private:
     static void enableDebugLayer();
 
     void createDXGIFactory();
-    void getAdapter();
+    void getAdapter(IDXGIAdapter1 **adapter);
+    void createDevice();
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
+    Microsoft::WRL::ComPtr<ID3D12Device> m_device;
 };
 
 
