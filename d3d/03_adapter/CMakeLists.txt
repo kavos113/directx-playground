@@ -9,3 +9,4 @@ add_executable(d3d_03_adapter
         D3DEngine.cpp
 )
 target_link_libraries(d3d_03_adapter PRIVATE d3d12 dxgi d3dcompiler)
+target_compile_definitions(d3d_03_adapter PRIVATE DEBUG)

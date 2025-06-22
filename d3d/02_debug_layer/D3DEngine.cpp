@@ -4,7 +4,9 @@
 
 D3DEngine::D3DEngine(HWND hwnd)
 {
+#ifdef DEBUG
     enableDebugLayer();
+#endif
 }
 
 D3DEngine::~D3DEngine()
