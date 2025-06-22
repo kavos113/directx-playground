@@ -204,14 +204,17 @@ void D3DEngine::createCommandResources()
 
 void D3DEngine::createSwapChain(HWND hwnd)
 {
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {
-        .Width = 800,
-        .Height = 600,
+        .Width = rc.right - rc.left,
+        .Height = rc.bottom - rc.top,
         .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
         .Stereo = FALSE,
         .SampleDesc = {1, 0},
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
-        .BufferCount = 2,
+        .BufferCount = FRAME_COUNT,
         .Scaling = DXGI_SCALING_STRETCH,
         .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
         .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
@@ -229,5 +232,47 @@ void D3DEngine::createSwapChain(HWND hwnd)
     {
         std::cerr << "Failed to create swap chain." << std::endl;
         return;
+    }
+}
+
+void D3DEngine::createSwapChainResources()
+{
+    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+        .NumDescriptors = 2,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 0
+    };
+    HRESULT hr = m_device->CreateDescriptorHeap(
+        &rtvHeapDesc,
+        IID_PPV_ARGS(&m_rtvHeap)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create RTV descriptor heap." << std::endl;
+        return;
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    hr = m_swapchain->GetDesc1(&swapChainDesc);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to get swap chain description." << std::endl;
+        return;
+    }
+
+    for (UINT i = 0; i < FRAME_COUNT; ++i)
+    {
+        hr = m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_backBuffers[i]));
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to get back buffer from swap chain." << std::endl;
+            return;
+        }
+
+        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
+        rtvHandle.ptr += i * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+        m_device->CreateRenderTargetView(m_backBuffers[i].Get(), nullptr, rtvHandle);
     }
 }

@@ -10,6 +10,8 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
+#include <array>
+
 class D3DEngine
 {
 public:
@@ -28,13 +30,19 @@ private:
     void createDevice();
     void createCommandResources();
     void createSwapChain(HWND hwnd);
+    void createSwapChainResources();
+
+    static constexpr UINT FRAME_COUNT = 2;
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
+
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 };
 
 
