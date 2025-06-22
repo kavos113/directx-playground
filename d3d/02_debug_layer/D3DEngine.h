@@ -6,6 +6,9 @@
 #endif
 #include <windows.h>
 
+#include <d3d12.h>
+#include <wrl/client.h>
+
 class D3DEngine
 {
 public:
@@ -15,6 +18,9 @@ public:
     void cleanup();
 
     void render();
+
+private:
+    static void enableDebugLayer();
 };
 
 
