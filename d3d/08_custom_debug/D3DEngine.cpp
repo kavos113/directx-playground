@@ -6,11 +6,14 @@
 D3DEngine::D3DEngine(HWND hwnd)
 {
 #ifdef DEBUG
-    enableDebugLayer();
+    m_debug = std::make_unique<Debug>();
+    Debug::enableDebugLayer();
 #endif
 
     createDXGIFactory();
     createDevice();
+    m_debug->setupCallback(m_device);
+
     createCommandResources();
     createSwapChain(hwnd);
     createFence();
@@ -38,13 +41,8 @@ void D3DEngine::cleanup()
     m_commandQueue.Reset();
     m_commandAllocator.Reset();
 
-    Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
-    HRESULT hr = m_device->QueryInterface(IID_PPV_ARGS(&debugDevice));
-    if (SUCCEEDED(hr))
-    {
-        debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL);
-        debugDevice.Reset();
-    }
+    m_debug->cleanup(m_device);
+    m_debug.reset();
 
     m_device.Reset();
     m_dxgiFactory.Reset();
@@ -57,23 +55,6 @@ void D3DEngine::render()
     beginFrame(frameIndex);
     recordCommands(frameIndex);
     endFrame(frameIndex);
-}
-
-void D3DEngine::enableDebugLayer()
-{
-    Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
-    HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
-    if (hr == S_OK)
-    {
-        debugController->EnableDebugLayer();
-        debugController->SetEnableGPUBasedValidation(true);
-    }
-    else
-    {
-        std::cerr << "Failed to get D3D12 debug interface." << std::endl;
-    }
-
-    std::cout << "D3D12 debug layer enabled." << std::endl;
 }
 
 void D3DEngine::createDXGIFactory()

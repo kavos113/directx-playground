@@ -11,6 +11,9 @@
 #include <wrl/client.h>
 
 #include <array>
+#include <memory>
+
+#include "Debug.h"
 
 class D3DEngine
 {
@@ -23,8 +26,6 @@ public:
     void render();
 
 private:
-    static void enableDebugLayer();
-
     void createDXGIFactory();
     void getAdapter(IDXGIAdapter1 **adapter);
     void createDevice();
@@ -38,6 +39,8 @@ private:
     void endFrame(UINT frameIndex);
 
     void waitForFence();
+
+    std::unique_ptr<Debug> m_debug;
 
     static constexpr UINT FRAME_COUNT = 2;
 
