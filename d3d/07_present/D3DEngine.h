@@ -33,6 +33,10 @@ private:
     void createSwapChainResources();
     void createFence();
 
+    void beginFrame(UINT frameIndex);
+    void recordCommands(UINT frameIndex);
+    void endFrame(UINT frameIndex);
+
     static constexpr UINT FRAME_COUNT = 2;
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
@@ -44,6 +48,7 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+    std::array<float, 4> m_clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
     Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
     UINT64 m_fenceValue = 0;
