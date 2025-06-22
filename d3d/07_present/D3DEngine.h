@@ -37,6 +37,8 @@ private:
     void recordCommands(UINT frameIndex);
     void endFrame(UINT frameIndex);
 
+    void waitForFence();
+
     static constexpr UINT FRAME_COUNT = 2;
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;

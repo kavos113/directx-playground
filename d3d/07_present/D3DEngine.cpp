@@ -20,7 +20,34 @@ D3DEngine::~D3DEngine() = default;
 
 void D3DEngine::cleanup()
 {
+    waitForFence();
+
     CloseHandle(m_fenceEvent);
+
+    m_fence.Reset();
+
+    m_commandList.Reset();
+
+    m_rtvHeap.Reset();
+    for (auto& buffer : m_backBuffers)
+    {
+        buffer.Reset();
+    }
+    m_swapchain.Reset();
+
+    m_commandQueue.Reset();
+    m_commandAllocator.Reset();
+
+    Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
+    HRESULT hr = m_device->QueryInterface(IID_PPV_ARGS(&debugDevice));
+    if (SUCCEEDED(hr))
+    {
+        debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL);
+        debugDevice.Reset();
+    }
+
+    m_device.Reset();
+    m_dxgiFactory.Reset();
 }
 
 void D3DEngine::render()
@@ -364,24 +391,7 @@ void D3DEngine::endFrame(UINT frameIndex)
     std::array<ID3D12CommandList*, 1> commandLists = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
 
-    m_fenceValue++;
-    hr = m_commandQueue->Signal(m_fence.Get(), m_fenceValue);
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to signal command queue." << std::endl;
-        return;
-    }
-
-    if (m_fence->GetCompletedValue() < m_fenceValue)
-    {
-        hr = m_fence->SetEventOnCompletion(m_fenceValue, m_fenceEvent);
-        if (FAILED(hr))
-        {
-            std::cerr << "Failed to set event on fence completion." << std::endl;
-            return;
-        }
-        WaitForSingleObject(m_fenceEvent, INFINITE);
-    }
+    waitForFence();
 
     hr = m_commandAllocator->Reset();
     if (FAILED(hr))
@@ -402,5 +412,28 @@ void D3DEngine::endFrame(UINT frameIndex)
     {
         std::cerr << "Failed to present swap chain." << std::endl;
         return;
+    }
+}
+
+void D3DEngine::waitForFence()
+{
+    m_fenceValue++;
+    UINT64 fenceValue = m_fenceValue;
+    HRESULT hr = m_commandQueue->Signal(m_fence.Get(), fenceValue);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to signal command queue." << std::endl;
+        return;
+    }
+
+    if (m_fence->GetCompletedValue() < fenceValue)
+    {
+        hr = m_fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to set event on fence completion." << std::endl;
+            return;
+        }
+        WaitForSingleObject(m_fenceEvent, INFINITE);
     }
 }
