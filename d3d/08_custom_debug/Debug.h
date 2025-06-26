@@ -31,7 +31,6 @@ private:
     DWORD m_callbackCookie = 0;
 
     static std::map<D3D12_MESSAGE_CATEGORY, std::wstring> m_categoryMap;
-    static std::map<D3D12_MESSAGE_ID, std::wstring> m_messageIdMap;
     static std::map<D3D12_MESSAGE_SEVERITY, std::wstring> m_severityMap;
 };
 
