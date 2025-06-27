@@ -26,6 +26,11 @@ public:
     void render();
 
 private:
+    struct Vertex
+    {
+
+    };
+
     void createDXGIFactory();
     void getAdapter(IDXGIAdapter1 **adapter);
     void createDevice();
