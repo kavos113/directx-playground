@@ -3,12 +3,14 @@
 
 #ifndef UNICODE
 #define UNICODE
+#include <vector>
 #endif
 #include <windows.h>
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
+#include <DirectXMath.h>
 
 #include <array>
 #include <memory>
@@ -28,7 +30,32 @@ public:
 private:
     struct Vertex
     {
+        DirectX::XMFLOAT3 position;
+        DirectX::XMFLOAT4 color;
 
+        static auto inputLayout()
+        {
+            return std::array{
+                D3D12_INPUT_ELEMENT_DESC{
+                    .SemanticName = "POSITION",
+                    .SemanticIndex = 0,
+                    .Format = DXGI_FORMAT_R32G32B32_FLOAT,
+                    .InputSlot = 0,
+                    .AlignedByteOffset = 0,
+                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    .InstanceDataStepRate = 0
+                },
+                D3D12_INPUT_ELEMENT_DESC{
+                    .SemanticName = "COLOR",
+                    .SemanticIndex = 0,
+                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+                    .InputSlot = 0,
+                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
+                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    .InstanceDataStepRate = 0
+                }
+            };
+        }
     };
 
     void createDXGIFactory();
@@ -38,6 +65,8 @@ private:
     void createSwapChain(HWND hwnd);
     void createSwapChainResources();
     void createFence();
+
+    void createVertexBuffer();
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
@@ -63,6 +92,23 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
     UINT64 m_fenceValue = 0;
     HANDLE m_fenceEvent = nullptr;
+
+    const std::vector<Vertex> m_vertices = {
+        {
+            {0.0f, 0.5f, 0.0f},
+            {1.0f, 0.0f, 0.0f, 1.0f}
+        },
+        {
+            {-0.5f, -0.5f, 0.0f},
+            {0.0f, 1.0f, 0.0f, 1.0f}
+        },
+        {
+            {0.5f, -0.5f, 0.0f},
+            {0.0f, 0.0f, 1.0f, 1.0f}
+        }
+    };
+
+    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
 };
 
 

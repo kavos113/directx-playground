@@ -17,6 +17,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     createCommandResources();
     createSwapChain(hwnd);
     createFence();
+
+    createVertexBuffer();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -417,4 +419,60 @@ void D3DEngine::waitForFence()
         }
         WaitForSingleObject(m_fenceEvent, INFINITE);
     }
+}
+
+void D3DEngine::createVertexBuffer()
+{
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+    D3D12_RESOURCE_DESC resourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = sizeof(Vertex) * m_vertices.size(),
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer;
+
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&vertexBuffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create vertex buffer." << std::endl;
+        return;
+    }
+
+    DirectX::XMFLOAT3 *vertexMap = nullptr;
+    hr = vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map vertex buffer." << std::endl;
+        return;
+    }
+    std::copy(m_vertices.begin(), m_vertices.end(), vertexMap);
+    vertexBuffer->Unmap(0, nullptr);
+
+    m_vertexBufferView = {
+        .BufferLocation = vertexBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
+        .StrideInBytes = sizeof(Vertex)
+    };
 }
