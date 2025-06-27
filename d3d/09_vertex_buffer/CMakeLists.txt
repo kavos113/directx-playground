@@ -11,3 +11,6 @@ add_executable(d3d_09_vertex_buffer
 )
 target_link_libraries(d3d_09_vertex_buffer PRIVATE d3d12 dxgi d3dcompiler)
 target_compile_definitions(d3d_09_vertex_buffer PRIVATE DEBUG)
+
+find_package(directxmath CONFIG REQUIRED)
+target_link_libraries(d3d_09_vertex_buffer PRIVATE Microsoft::DirectXMath)
