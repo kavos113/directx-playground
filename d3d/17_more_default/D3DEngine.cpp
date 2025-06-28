@@ -507,25 +507,43 @@ void D3DEngine::createVertexBuffer()
     createBuffer(
         sizeof(Vertex) * m_vertices.size(),
         &m_vertexBuffer,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        D3D12_RESOURCE_STATE_COMMON
+    );
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    createBuffer(
+        sizeof(Vertex) * m_vertices.size(),
+        &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
     Vertex *vertexMap = nullptr;
-    HRESULT hr = m_vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
+    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map vertex buffer." << std::endl;
         return;
     }
     std::ranges::copy(m_vertices, vertexMap);
-    m_vertexBuffer->Unmap(0, nullptr);
+    stagingBuffer->Unmap(0, nullptr);
+
+    copyBuffer(stagingBuffer, m_vertexBuffer);
 
     m_vertexBufferView = {
         .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
         .StrideInBytes = sizeof(Vertex)
     };
+
+    barrier(
+        m_vertexBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
 }
 
 void D3DEngine::createIndexBuffer()
@@ -533,25 +551,43 @@ void D3DEngine::createIndexBuffer()
     createBuffer(
         sizeof(unsigned short) * m_indices.size(),
         &m_indexBuffer,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        D3D12_RESOURCE_STATE_COMMON
+    );
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    createBuffer(
+        sizeof(unsigned short) * m_indices.size(),
+        &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
     unsigned short *indexMap = nullptr;
-    HRESULT hr = m_indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
+    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map index buffer." << std::endl;
         return;
     }
     std::ranges::copy(m_indices, indexMap);
-    m_indexBuffer->Unmap(0, nullptr);
+    stagingBuffer->Unmap(0, nullptr);
+
+    copyBuffer(stagingBuffer, m_indexBuffer);
 
     m_indexBufferView = {
         .BufferLocation = m_indexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>(sizeof(unsigned short) * m_indices.size()),
         .Format = DXGI_FORMAT_R16_UINT
     };
+
+    barrier(
+        m_indexBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_INDEX_BUFFER
+    );
 }
 
 Microsoft::WRL::ComPtr<ID3D10Blob> D3DEngine::compileShader(
@@ -777,20 +813,31 @@ void D3DEngine::createColorBuffer()
     createBuffer(
         AlignCBuffer(sizeof(float) * m_color.size()),
         &m_colorBuffer,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        D3D12_RESOURCE_STATE_COMMON
+    );
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    createBuffer(
+        AlignCBuffer(sizeof(float) * m_color.size()),
+        &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
     float *colorMap = nullptr;
-    HRESULT hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
+    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map color buffer." << std::endl;
         return;
     }
-
     std::ranges::copy(m_color, colorMap);
-    m_colorBuffer->Unmap(0, nullptr);
+    stagingBuffer->Unmap(0, nullptr);
+
+    copyBuffer(stagingBuffer, m_colorBuffer);
 
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
         .BufferLocation = m_colorBuffer->GetGPUVirtualAddress(),
@@ -800,6 +847,12 @@ void D3DEngine::createColorBuffer()
     m_device->CreateConstantBufferView(
         &cbvDesc,
         m_descHeap->GetCPUDescriptorHandleForHeapStart()
+    );
+
+    barrier(
+        m_colorBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 }
 
@@ -886,6 +939,7 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
         AlignCBuffer(image->rowPitch) * image->height,
         &stagingResource,
         D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
@@ -907,7 +961,7 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
     }
     stagingResource->Unmap(0, nullptr);
 
-    copyBuffer(stagingResource, m_texture);
+    copyTexture(stagingResource, m_texture);
 
     D3D12_RESOURCE_BARRIER barrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -949,6 +1003,7 @@ void D3DEngine::createBuffer(
     UINT64 size,
     ID3D12Resource **buffer,
     D3D12_HEAP_TYPE heapType,
+    D3D12_TEXTURE_LAYOUT layout,
     D3D12_RESOURCE_STATES initialState
 )
 {
@@ -959,10 +1014,6 @@ void D3DEngine::createBuffer(
         .CreationNodeMask = 0,
         .VisibleNodeMask = 0
     };
-
-    D3D12_TEXTURE_LAYOUT layout = heapType == D3D12_HEAP_TYPE_DEFAULT
-        ? D3D12_TEXTURE_LAYOUT_UNKNOWN
-        : D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -991,7 +1042,7 @@ void D3DEngine::createBuffer(
     }
 }
 
-void D3DEngine::copyBuffer(
+void D3DEngine::copyTexture(
     const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
     const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
 )
@@ -1055,4 +1106,60 @@ void D3DEngine::copyBuffer(
         std::cerr << "Failed to reset copy command list." << std::endl;
         return;
     }
+}
+
+void D3DEngine::copyBuffer(
+    const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
+    const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
+)
+{
+    m_copyCommandList->CopyResource(
+        dstBuffer.Get(),
+        srcBuffer.Get()
+    );
+
+    HRESULT hr = m_copyCommandList->Close();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to close copy command list." << std::endl;
+        return;
+    }
+
+    std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
+    m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+
+    waitForFence(m_copyCommandQueue);
+
+    hr = m_copyCommandAllocator->Reset();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset copy command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_copyCommandList->Reset(m_copyCommandAllocator.Get(), nullptr);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset copy command list." << std::endl;
+        return;
+    }
+}
+
+void D3DEngine::barrier(
+    const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
+    D3D12_RESOURCE_STATES beforeState,
+    D3D12_RESOURCE_STATES afterState
+) const
+{
+    D3D12_RESOURCE_BARRIER barrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition = {
+            .pResource = resource.Get(),
+            .Subresource = 0,
+            .StateBefore = beforeState,
+            .StateAfter = afterState
+        }
+    };
+    m_commandList->ResourceBarrier(1, &barrier);
 }

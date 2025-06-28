@@ -87,12 +87,23 @@ private:
         UINT64 size,
         ID3D12Resource **buffer,
         D3D12_HEAP_TYPE heapType,
+        D3D12_TEXTURE_LAYOUT layout,
         D3D12_RESOURCE_STATES initialState
+    );
+    void copyTexture(
+        const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
+        const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
     );
     void copyBuffer(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
         const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
     );
+
+    void barrier(
+        const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
+        D3D12_RESOURCE_STATES beforeState,
+        D3D12_RESOURCE_STATES afterState
+    ) const;
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex) const;
