@@ -968,7 +968,7 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
     Microsoft::WRL::ComPtr<ID3D12Resource> stagingResource;
     createBuffer(
         AlignCBuffer(image->rowPitch) * image->height,
-        stagingResource,
+        &stagingResource,
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
@@ -1031,7 +1031,7 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
 // create simple buffer(not texture)
 void D3DEngine::createBuffer(
     UINT64 size,
-    Microsoft::WRL::ComPtr<ID3D12Resource> buffer,
+    ID3D12Resource **buffer,
     D3D12_HEAP_TYPE heapType,
     D3D12_RESOURCE_STATES initialState
 )
@@ -1066,7 +1066,7 @@ void D3DEngine::createBuffer(
         &resourceDesc,
         initialState,
         nullptr,
-        IID_PPV_ARGS(&buffer)
+        IID_PPV_ARGS(buffer)
     );
     if (FAILED(hr))
     {
@@ -1076,8 +1076,8 @@ void D3DEngine::createBuffer(
 }
 
 void D3DEngine::copyBuffer(
-    Microsoft::WRL::ComPtr<ID3D12Resource> srcBuffer,
-    Microsoft::WRL::ComPtr<ID3D12Resource> dstBuffer,
+    const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
+    const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
 )
 {
     D3D12_RESOURCE_DESC resourceDesc = dstBuffer->GetDesc();
