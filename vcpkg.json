@@ -11,5 +11,8 @@
   }, {
     "name" : "vcpkg-cmake",
     "version>=" : "2024-04-23"
+  }, {
+    "name" : "directxtex",
+    "version>=" : "2025-03-24"
   } ]
 }
