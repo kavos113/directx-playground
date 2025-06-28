@@ -100,6 +100,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
 
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_copyCommandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyCommandQueue;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_copyCommandList;
+
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;

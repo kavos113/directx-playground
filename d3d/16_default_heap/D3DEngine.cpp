@@ -236,6 +236,39 @@ void D3DEngine::createCommandResources()
         std::cerr << "Failed to create command queue." << std::endl;
         return;
     }
+
+    hr = m_device->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_COPY,
+        IID_PPV_ARGS(&m_copyCommandAllocator)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create copy command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_device->CreateCommandList(
+        0,
+        D3D12_COMMAND_LIST_TYPE_COPY,
+        m_copyCommandAllocator.Get(),
+        nullptr,
+        IID_PPV_ARGS(&m_copyCommandList)
+    );
+    if     (FAILED(hr))
+    {
+        std::cerr << "Failed to create copy command list." << std::endl;
+        return;
+    }
+
+    hr = m_device->CreateCommandQueue(
+        &queueDesc,
+        IID_PPV_ARGS(&m_copyCommandQueue)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create copy command queue." << std::endl;
+        return;
+    }
 }
 
 void D3DEngine::createSwapChain(HWND hwnd)
