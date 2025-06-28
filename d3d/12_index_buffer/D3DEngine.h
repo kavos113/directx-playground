@@ -68,6 +68,7 @@ private:
     void createFence();
 
     void createVertexBuffer();
+    void createIndexBuffer();
 
     static Microsoft::WRL::ComPtr<ID3D10Blob> compileShader(
         const wchar_t *fileName,
@@ -80,7 +81,7 @@ private:
     void createViewport(HWND hwnd);
 
     void beginFrame(UINT frameIndex);
-    void recordCommands(UINT frameIndex);
+    void recordCommands(UINT frameIndex) const;
     void endFrame(UINT frameIndex);
 
     void waitForFence();
@@ -106,21 +107,31 @@ private:
 
     const std::vector<Vertex> m_vertices = {
         {
-            {0.0f, 0.5f, 0.0f},
+            {-0.5, -0.5f, 0.0f},
             {1.0f, 0.0f, 0.0f, 1.0f}
         },
         {
-            {-0.5f, -0.5f, 0.0f},
+            {-0.5f, 0.5f, 0.0f},
             {0.0f, 1.0f, 0.0f, 1.0f}
         },
         {
             {0.5f, -0.5f, 0.0f},
             {0.0f, 0.0f, 1.0f, 1.0f}
+        },
+        {
+            {0.5f, 0.5f, 0.0f},
+            {1.0f, 1.0f, 0.0f, 1.0f}
         }
+    };
+    const std::vector<unsigned short> m_indices = {
+        0, 1, 2,
+        2, 1, 3
     };
 
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
+    D3D12_INDEX_BUFFER_VIEW m_indexBufferView = {};
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;

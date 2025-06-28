@@ -19,6 +19,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createFence();
 
     createVertexBuffer();
+    createIndexBuffer();
 
     createPipelineState();
     createViewport(hwnd);
@@ -349,7 +350,7 @@ void D3DEngine::beginFrame(UINT frameIndex)
 
 }
 
-void D3DEngine::recordCommands(UINT frameIndex)
+void D3DEngine::recordCommands(UINT frameIndex) const
 {
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
     m_commandList->RSSetViewports(1, &m_viewport);
@@ -357,10 +358,11 @@ void D3DEngine::recordCommands(UINT frameIndex)
 
     m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    m_commandList->IASetIndexBuffer(&m_indexBufferView);
 
     m_commandList->SetPipelineState(m_pipelineState.Get());
 
-    m_commandList->DrawInstanced(static_cast<UINT>(m_vertices.size()), 1, 0, 0);
+    m_commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -485,6 +487,60 @@ void D3DEngine::createVertexBuffer()
         .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
         .StrideInBytes = sizeof(Vertex)
+    };
+}
+
+void D3DEngine::createIndexBuffer()
+{
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+    D3D12_RESOURCE_DESC resourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = sizeof(unsigned short) * m_indices.size(),
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_indexBuffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create index buffer." << std::endl;
+        return;
+    }
+
+    unsigned short *indexMap = nullptr;
+    hr = m_indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map index buffer." << std::endl;
+        return;
+    }
+    std::ranges::copy(m_indices, indexMap);
+    m_indexBuffer->Unmap(0, nullptr);
+
+    m_indexBufferView = {
+        .BufferLocation = m_indexBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = static_cast<UINT>(sizeof(unsigned short) * m_indices.size()),
+        .Format = DXGI_FORMAT_R16_UINT
     };
 }
 
