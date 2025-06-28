@@ -628,26 +628,50 @@ void D3DEngine::createPipelineState()
     Microsoft::WRL::ComPtr<ID3D10Blob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
 
-    D3D12_DESCRIPTOR_RANGE descriptorRange = {
-        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-        .NumDescriptors = 1,
-        .BaseShaderRegister = 0,
-        .RegisterSpace = 0,
-        .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+    std::array descriptorRanges = {
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 0,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        },
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 0,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        }
     };
     D3D12_ROOT_PARAMETER rootParameter = {
         .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
         .DescriptorTable = {
-            .NumDescriptorRanges = 1,
-            .pDescriptorRanges = &descriptorRange
+            .NumDescriptorRanges = static_cast<UINT>(descriptorRanges.size()),
+            .pDescriptorRanges = descriptorRanges.data()
         },
         .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL,
     };
+
+    D3D12_STATIC_SAMPLER_DESC samplerDesc = {
+        .Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        .AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .MipLODBias = 0.0f,
+        .MaxAnisotropy = 1,
+        .ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+        .BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+        .MinLOD = 0.0f,
+        .MaxLOD = D3D12_FLOAT32_MAX,
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+    };
+
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
         .NumParameters = 1,
         .pParameters = &rootParameter,
-        .NumStaticSamplers = 0,
-        .pStaticSamplers = nullptr,
+        .NumStaticSamplers = 1,
+        .pStaticSamplers = &samplerDesc,
         .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
     };
     HRESULT hr = D3D12SerializeRootSignature(
@@ -822,7 +846,7 @@ void D3DEngine::createDescriptorHeap()
 {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 1,
+        .NumDescriptors = 2,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         .NodeMask = 0
     };
@@ -888,7 +912,7 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
         &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         nullptr,
         IID_PPV_ARGS(&m_texture)
     );
@@ -910,4 +934,25 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
         std::cerr << "Failed to write texture data to subresource." << std::endl;
         return;
     }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
+        .Format = metadata.format,
+        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Texture2D = {
+            .MostDetailedMip = 0,
+            .MipLevels = static_cast<UINT>(metadata.mipLevels),
+            .PlaneSlice = 0,
+            .ResourceMinLODClamp = 0.0f
+        }
+    };
+
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
+    srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    m_device->CreateShaderResourceView(
+        m_texture.Get(),
+        &srvDesc,
+        srvHandle
+    );
 }
