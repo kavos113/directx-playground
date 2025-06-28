@@ -351,6 +351,16 @@ void D3DEngine::beginFrame(UINT frameIndex)
 
 void D3DEngine::recordCommands(UINT frameIndex)
 {
+    m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+    m_commandList->RSSetViewports(1, &m_viewport);
+    m_commandList->RSSetScissorRects(1, &m_scissorRect);
+
+    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+
+    m_commandList->SetPipelineState(m_pipelineState.Get());
+
+    m_commandList->DrawInstanced(static_cast<UINT>(m_vertices.size()), 1, 0, 0);
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -447,15 +457,13 @@ void D3DEngine::createVertexBuffer()
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer;
-
     HRESULT hr = m_device->CreateCommittedResource(
         &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        IID_PPV_ARGS(&vertexBuffer)
+        IID_PPV_ARGS(&m_vertexBuffer)
     );
     if (FAILED(hr))
     {
@@ -463,18 +471,18 @@ void D3DEngine::createVertexBuffer()
         return;
     }
 
-    DirectX::XMFLOAT3 *vertexMap = nullptr;
-    hr = vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
+    Vertex *vertexMap = nullptr;
+    hr = m_vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map vertex buffer." << std::endl;
         return;
     }
-    std::copy(m_vertices.begin(), m_vertices.end(), vertexMap);
-    vertexBuffer->Unmap(0, nullptr);
+    std::ranges::copy(m_vertices, vertexMap);
+    m_vertexBuffer->Unmap(0, nullptr);
 
     m_vertexBufferView = {
-        .BufferLocation = vertexBuffer->GetGPUVirtualAddress(),
+        .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
         .StrideInBytes = sizeof(Vertex)
     };
@@ -526,21 +534,20 @@ Microsoft::WRL::ComPtr<ID3D10Blob> D3DEngine::compileShader(
 
 void D3DEngine::createPipelineState()
 {
-    auto ps = compileShader(L"shader.hlsl", "PSMain", "ps_5_0");
+    auto ps = compileShader(L"shader.hlsl", "ps_main", "ps_5_0");
     if (!ps)
     {
         std::cerr << "Failed to compile pixel shader." << std::endl;
         return;
     }
 
-    auto vs = compileShader(L"shader.hlsl", "VSMain", "vs_5_0");
+    auto vs = compileShader(L"shader.hlsl", "vs_main", "vs_5_0");
     if (!vs)
     {
         std::cerr << "Failed to compile vertex shader." << std::endl;
         return;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
     Microsoft::WRL::ComPtr<ID3D10Blob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
@@ -570,7 +577,7 @@ void D3DEngine::createPipelineState()
         0,
         signatureBlob->GetBufferPointer(),
         signatureBlob->GetBufferSize(),
-        IID_PPV_ARGS(&rootSignature)
+        IID_PPV_ARGS(&m_rootSignature)
     );
     if (FAILED(hr))
     {
@@ -580,7 +587,7 @@ void D3DEngine::createPipelineState()
 
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineDesc = {
-        .pRootSignature = rootSignature.Get(),
+        .pRootSignature = m_rootSignature.Get(),
         .VS = {
             .pShaderBytecode = vs->GetBufferPointer(),
             .BytecodeLength = vs->GetBufferSize()

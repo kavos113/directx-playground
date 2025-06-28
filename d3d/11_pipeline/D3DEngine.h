@@ -120,8 +120,10 @@ private:
     };
 
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
 
     D3D12_VIEWPORT m_viewport = {};
     D3D12_RECT m_scissorRect = {};
