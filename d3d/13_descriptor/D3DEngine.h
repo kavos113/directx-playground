@@ -32,7 +32,6 @@ private:
     struct Vertex
     {
         DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT4 color;
 
         static auto inputLayout()
         {
@@ -46,15 +45,6 @@ private:
                     .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
                     .InstanceDataStepRate = 0
                 },
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "COLOR",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                }
             };
         }
     };
@@ -110,19 +100,15 @@ private:
     const std::vector<Vertex> m_vertices = {
         {
             {-0.5, -0.5f, 0.0f},
-            {1.0f, 0.0f, 0.0f, 1.0f}
         },
         {
             {-0.5f, 0.5f, 0.0f},
-            {0.0f, 1.0f, 0.0f, 1.0f}
         },
         {
             {0.5f, -0.5f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 1.0f}
         },
         {
             {0.5f, 0.5f, 0.0f},
-            {1.0f, 1.0f, 0.0f, 1.0f}
         }
     };
     const std::vector<unsigned short> m_indices = {

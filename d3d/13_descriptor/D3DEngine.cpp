@@ -363,10 +363,10 @@ void D3DEngine::recordCommands(UINT frameIndex) const
     m_commandList->IASetIndexBuffer(&m_indexBufferView);
 
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-    m_commandList->SetDescriptorHeaps(1, m_rtvHeap.GetAddressOf());
+    m_commandList->SetDescriptorHeaps(1, m_descHeap.GetAddressOf());
     m_commandList->SetGraphicsRootDescriptorTable(
         0, // Root parameter index
-        m_rtvHeap->GetGPUDescriptorHandleForHeapStart()
+        m_descHeap->GetGPUDescriptorHandleForHeapStart()
     );
 
     m_commandList->SetPipelineState(m_pipelineState.Get());
@@ -625,11 +625,11 @@ void D3DEngine::createPipelineState()
     };
     D3D12_ROOT_PARAMETER rootParameter = {
         .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL,
         .DescriptorTable = {
             .NumDescriptorRanges = 1,
             .pDescriptorRanges = &descriptorRange
-        }
+        },
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL,
     };
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
         .NumParameters = 1,
@@ -760,7 +760,7 @@ void D3DEngine::createColorBuffer()
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
         .Alignment = 0,
-        .Width = sizeof(float) * m_color.size(),
+        .Width = (sizeof(float) * m_color.size()) + 0xff & ~0xff, // Must be a multiple of 256 bytes
         .Height = 1,
         .DepthOrArraySize = 1,
         .MipLevels = 1,
@@ -797,7 +797,7 @@ void D3DEngine::createColorBuffer()
 
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
         .BufferLocation = m_colorBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(float) * m_color.size())
+        .SizeInBytes = static_cast<UINT>(m_colorBuffer->GetDesc().Width) // Must be a multiple of 256 bytes
     };
 
     m_device->CreateConstantBufferView(

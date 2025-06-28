@@ -6,17 +6,14 @@ cbuffer cb : register(b0)
 struct vs_output
 {
     float4 position : SV_POSITION;
-    float4 color : COLOR0;
 };
 
 vs_output vs_main(
-    float4 position : POSITION,
-    float4 color : COLOR
+    float4 position : POSITION
 )
 {
     vs_output output;
     output.position = position;
-    output.color = color;
     return output;
 }
 
