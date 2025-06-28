@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.30)
 project(Win32D2DExamples)
 
+set(D3D_RESOURCES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/d3d/resources")
+
 add_subdirectory(win32/01_hello_world)
 add_subdirectory(win32/02_split_class)
 
@@ -21,3 +23,4 @@ add_subdirectory(d3d/10_shaders)
 add_subdirectory(d3d/11_pipeline)
 add_subdirectory(d3d/12_index_buffer)
 add_subdirectory(d3d/13_descriptor)
+add_subdirectory(d3d/14_load_texture)
