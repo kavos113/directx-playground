@@ -93,11 +93,12 @@ private:
     void copyTexture(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
         const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
-    );
+    ) const;
     void copyBuffer(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
         const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
-    );
+    ) const;
+    void executeCopy();
 
     void barrier(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
@@ -176,6 +177,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
+
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_waitForCopyResources;
 };
 
 

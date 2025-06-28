@@ -30,6 +30,8 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     loadTexture(L"texture.png");
 
+    executeCopy();
+
     createPipelineState();
     createViewport(hwnd);
 }
@@ -544,6 +546,8 @@ void D3DEngine::createVertexBuffer()
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
+
+    m_waitForCopyResources.push_back(stagingBuffer);
 }
 
 void D3DEngine::createIndexBuffer()
@@ -588,6 +592,8 @@ void D3DEngine::createIndexBuffer()
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_INDEX_BUFFER
     );
+
+    m_waitForCopyResources.push_back(stagingBuffer);
 }
 
 Microsoft::WRL::ComPtr<ID3D10Blob> D3DEngine::compileShader(
@@ -854,6 +860,8 @@ void D3DEngine::createColorBuffer()
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
+
+    m_waitForCopyResources.push_back(stagingBuffer);
 }
 
 void D3DEngine::createDescriptorHeap()
@@ -975,6 +983,8 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
     };
     m_commandList->ResourceBarrier(1, &barrier);
 
+    m_waitForCopyResources.push_back(stagingResource);
+
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
         .Format = metadata.format,
         .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
@@ -1045,7 +1055,7 @@ void D3DEngine::createBuffer(
 void D3DEngine::copyTexture(
     const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
     const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
-)
+) const
 {
     D3D12_RESOURCE_DESC resourceDesc = dstBuffer->GetDesc();
 
@@ -1080,69 +1090,17 @@ void D3DEngine::copyTexture(
         &srcLocation,
         nullptr
     );
-
-    HRESULT hr = m_copyCommandList->Close();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to close copy command list." << std::endl;
-        return;
-    }
-
-    std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
-    m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
-
-    waitForFence(m_copyCommandQueue);
-
-    hr = m_copyCommandAllocator->Reset();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset copy command allocator." << std::endl;
-        return;
-    }
-
-    hr = m_copyCommandList->Reset(m_copyCommandAllocator.Get(), nullptr);
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset copy command list." << std::endl;
-        return;
-    }
 }
 
 void D3DEngine::copyBuffer(
     const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
     const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
-)
+) const
 {
     m_copyCommandList->CopyResource(
         dstBuffer.Get(),
         srcBuffer.Get()
     );
-
-    HRESULT hr = m_copyCommandList->Close();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to close copy command list." << std::endl;
-        return;
-    }
-
-    std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
-    m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
-
-    waitForFence(m_copyCommandQueue);
-
-    hr = m_copyCommandAllocator->Reset();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset copy command allocator." << std::endl;
-        return;
-    }
-
-    hr = m_copyCommandList->Reset(m_copyCommandAllocator.Get(), nullptr);
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset copy command list." << std::endl;
-        return;
-    }
 }
 
 void D3DEngine::barrier(
@@ -1162,4 +1120,35 @@ void D3DEngine::barrier(
         }
     };
     m_commandList->ResourceBarrier(1, &barrier);
+}
+
+void D3DEngine::executeCopy()
+{
+    HRESULT hr = m_copyCommandList->Close();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to close copy command list." << std::endl;
+        return;
+    }
+
+    std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
+    m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+
+    waitForFence(m_copyCommandQueue);
+
+    hr = m_copyCommandAllocator->Reset();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset copy command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_copyCommandList->Reset(m_copyCommandAllocator.Get(), nullptr);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset copy command list." << std::endl;
+        return;
+    }
+
+    m_waitForCopyResources.clear();
 }
