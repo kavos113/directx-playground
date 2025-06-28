@@ -72,6 +72,8 @@ private:
     void createPipelineState();
     void createViewport(HWND hwnd);
 
+    void loadTexture(const wchar_t *fileName);
+
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex) const;
     void endFrame(UINT frameIndex);
@@ -133,6 +135,8 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
 };
 
 

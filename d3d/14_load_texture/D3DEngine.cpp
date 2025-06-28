@@ -1,5 +1,7 @@
 #include "D3DEngine.h"
 
+#include <DirectXTex.h>
+
 #include <array>
 #include <iostream>
 
@@ -24,6 +26,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     createIndexBuffer();
     createColorBuffer();
 
+    loadTexture(L"texture.png");
+
     createPipelineState();
     createViewport(hwnd);
 }
@@ -39,6 +43,14 @@ void D3DEngine::cleanup()
     m_fence.Reset();
 
     m_commandList.Reset();
+
+    m_vertexBuffer.Reset();
+    m_indexBuffer.Reset();
+    m_colorBuffer.Reset();
+    m_descHeap.Reset();
+
+    m_rootSignature.Reset();
+    m_pipelineState.Reset();
 
     m_rtvHeap.Reset();
     for (auto& buffer : m_backBuffers)
@@ -821,6 +833,81 @@ void D3DEngine::createDescriptorHeap()
     if (FAILED(hr))
     {
         std::cerr << "Failed to create descriptor heap." << std::endl;
+        return;
+    }
+}
+
+void D3DEngine::loadTexture(const wchar_t *fileName)
+{
+    DirectX::TexMetadata metadata;
+    DirectX::ScratchImage scratchImage;
+
+    HRESULT hr = DirectX::LoadFromWICFile(
+        fileName,
+        DirectX::WIC_FLAGS_NONE,
+        &metadata,
+        scratchImage
+    );
+    if (FAILED(hr))
+    {
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            std::wcerr << L"Texture file not found: " << fileName << std::endl;
+        }
+        else
+        {
+            std::wcerr << L"Failed to load texture from file: " << fileName << L" with error: " << std::hex << hr << std::endl;
+        }
+        return;
+    }
+
+    const DirectX::Image *image = scratchImage.GetImage(0, 0, 0);
+
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_CUSTOM,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_L0,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+    D3D12_RESOURCE_DESC resourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0,
+        .Width = metadata.width,
+        .Height = static_cast<UINT>(metadata.height),
+        .DepthOrArraySize = static_cast<UINT16>(metadata.arraySize),
+        .MipLevels = static_cast<UINT16>(metadata.mipLevels),
+        .Format = metadata.format,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(&m_texture)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create texture resource." << std::endl;
+        return;
+    }
+
+    hr = m_texture->WriteToSubresource(
+        0,
+        nullptr,
+        image->pixels,
+        image->rowPitch,
+        image->slicePitch
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to write texture data to subresource." << std::endl;
         return;
     }
 }
