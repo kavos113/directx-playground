@@ -14,3 +14,5 @@ target_compile_definitions(d3d_10_shaders PRIVATE DEBUG)
 
 find_package(directxmath CONFIG REQUIRED)
 target_link_libraries(d3d_10_shaders PRIVATE Microsoft::DirectXMath)
+
+file(COPY shader.hlsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

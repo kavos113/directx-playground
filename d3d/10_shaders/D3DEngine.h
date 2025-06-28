@@ -3,17 +3,18 @@
 
 #ifndef UNICODE
 #define UNICODE
-#include <vector>
 #endif
 #include <windows.h>
 
 #include <d3d12.h>
+#include <d3dcompiler.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
 
 #include <array>
 #include <memory>
+#include <vector>
 
 #include "Debug.h"
 
@@ -67,6 +68,13 @@ private:
     void createFence();
 
     void createVertexBuffer();
+
+    static Microsoft::WRL::ComPtr<ID3D10Blob> compileShader(
+        const wchar_t *fileName,
+        const char *entryPoint,
+        const char *target,
+        UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG
+    );
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);

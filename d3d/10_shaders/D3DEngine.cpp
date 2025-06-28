@@ -476,3 +476,47 @@ void D3DEngine::createVertexBuffer()
         .StrideInBytes = sizeof(Vertex)
     };
 }
+
+Microsoft::WRL::ComPtr<ID3D10Blob> D3DEngine::compileShader(
+    const wchar_t *fileName,
+    const char *entryPoint,
+    const char *target,
+    UINT flags
+)
+{
+    Microsoft::WRL::ComPtr<ID3D10Blob> shaderBlob;
+    Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
+
+    HRESULT hr = D3DCompileFromFile(
+        fileName,
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        entryPoint,
+        target,
+        flags,
+        0,
+        &shaderBlob,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            std::wcerr << L"Shader file not found: " << fileName << std::endl;
+            return nullptr;
+        }
+
+        if (errorBlob)
+        {
+            std::string errorMessage(static_cast<const char*>(errorBlob->GetBufferPointer()), errorBlob->GetBufferSize());
+            std::cerr << "Shader compilation failed: " << errorMessage << std::endl;
+        }
+        else
+        {
+            std::cerr << "Shader compilation failed with HRESULT: " << hr << std::endl;
+        }
+        return nullptr;
+    }
+
+    return shaderBlob;
+}
