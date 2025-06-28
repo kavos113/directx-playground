@@ -19,6 +19,9 @@ D3DEngine::D3DEngine(HWND hwnd)
     createFence();
 
     createVertexBuffer();
+
+    createPipelineState();
+    createViewport(hwnd);
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -632,4 +635,26 @@ void D3DEngine::createPipelineState()
         std::cerr << "Failed to create graphics pipeline state." << std::endl;
         return;
     }
+}
+
+void D3DEngine::createViewport(HWND hwnd)
+{
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+
+    m_viewport = {
+        .TopLeftX = static_cast<FLOAT>(rc.left),
+        .TopLeftY = static_cast<FLOAT>(rc.top),
+        .Width = static_cast<FLOAT>(rc.right - rc.left),
+        .Height = static_cast<FLOAT>(rc.bottom - rc.top),
+        .MinDepth = 0.0f,
+        .MaxDepth = 1.0f
+    };
+
+    m_scissorRect = {
+        .left = rc.left,
+        .top = rc.top,
+        .right = rc.right,
+        .bottom = rc.bottom
+    };
 }
