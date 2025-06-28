@@ -504,43 +504,15 @@ void D3DEngine::waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue)
 
 void D3DEngine::createVertexBuffer()
 {
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_UPLOAD,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
-
-    D3D12_RESOURCE_DESC resourceDesc = {
-        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-        .Alignment = 0,
-        .Width = sizeof(Vertex) * m_vertices.size(),
-        .Height = 1,
-        .DepthOrArraySize = 1,
-        .MipLevels = 1,
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .SampleDesc = {1, 0},
-        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        .Flags = D3D12_RESOURCE_FLAG_NONE
-    };
-
-    HRESULT hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_vertexBuffer)
+    createBuffer(
+        sizeof(Vertex) * m_vertices.size(),
+        &m_vertexBuffer,
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_STATE_GENERIC_READ
     );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create vertex buffer." << std::endl;
-        return;
-    }
 
     Vertex *vertexMap = nullptr;
-    hr = m_vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
+    HRESULT hr = m_vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map vertex buffer." << std::endl;
@@ -558,43 +530,15 @@ void D3DEngine::createVertexBuffer()
 
 void D3DEngine::createIndexBuffer()
 {
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_UPLOAD,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
-
-    D3D12_RESOURCE_DESC resourceDesc = {
-        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-        .Alignment = 0,
-        .Width = sizeof(unsigned short) * m_indices.size(),
-        .Height = 1,
-        .DepthOrArraySize = 1,
-        .MipLevels = 1,
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .SampleDesc = {1, 0},
-        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        .Flags = D3D12_RESOURCE_FLAG_NONE
-    };
-
-    HRESULT hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_indexBuffer)
+    createBuffer(
+        sizeof(unsigned short) * m_indices.size(),
+        &m_indexBuffer,
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_STATE_GENERIC_READ
     );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create index buffer." << std::endl;
-        return;
-    }
 
     unsigned short *indexMap = nullptr;
-    hr = m_indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
+    HRESULT hr = m_indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map index buffer." << std::endl;
@@ -830,43 +774,15 @@ void D3DEngine::createViewport(HWND hwnd)
 
 void D3DEngine::createColorBuffer()
 {
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_UPLOAD,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
-
-    D3D12_RESOURCE_DESC resourceDesc = {
-        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-        .Alignment = 0,
-        .Width = AlignCBuffer(sizeof(float) * m_color.size()),
-        .Height = 1,
-        .DepthOrArraySize = 1,
-        .MipLevels = 1,
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .SampleDesc = {1, 0},
-        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        .Flags = D3D12_RESOURCE_FLAG_NONE
-    };
-
-    HRESULT hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_colorBuffer)
+    createBuffer(
+        AlignCBuffer(sizeof(float) * m_color.size()),
+        &m_colorBuffer,
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_STATE_GENERIC_READ
     );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create color buffer." << std::endl;
-        return;
-    }
 
     float *colorMap = nullptr;
-    hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
+    HRESULT hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map color buffer." << std::endl;
