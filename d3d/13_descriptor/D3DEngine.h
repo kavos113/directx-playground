@@ -69,6 +69,8 @@ private:
 
     void createVertexBuffer();
     void createIndexBuffer();
+    void createColorBuffer();
+    void createDescriptorHeap();
 
     static Microsoft::WRL::ComPtr<ID3D10Blob> compileShader(
         const wchar_t *fileName,
@@ -128,6 +130,10 @@ private:
         2, 1, 3
     };
 
+    const std::vector<float> m_color = {
+        1.0f, 1.0f, 0.0f, 1.0f
+    };
+
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView = {};
@@ -138,6 +144,9 @@ private:
 
     D3D12_VIEWPORT m_viewport = {};
     D3D12_RECT m_scissorRect = {};
+
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
 };
 
 

@@ -18,8 +18,11 @@ D3DEngine::D3DEngine(HWND hwnd)
     createSwapChain(hwnd);
     createFence();
 
+    createDescriptorHeap();
+
     createVertexBuffer();
     createIndexBuffer();
+    createColorBuffer();
 
     createPipelineState();
     createViewport(hwnd);
@@ -720,4 +723,82 @@ void D3DEngine::createViewport(HWND hwnd)
         .right = rc.right,
         .bottom = rc.bottom
     };
+}
+
+void D3DEngine::createColorBuffer()
+{
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+    D3D12_RESOURCE_DESC resourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = sizeof(float) * m_color.size(),
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_colorBuffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create color buffer." << std::endl;
+        return;
+    }
+
+    float *colorMap = nullptr;
+    hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map color buffer." << std::endl;
+        return;
+    }
+
+    std::ranges::copy(m_color, colorMap);
+    m_colorBuffer->Unmap(0, nullptr);
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
+        .BufferLocation = m_colorBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = static_cast<UINT>(sizeof(float) * m_color.size())
+    };
+
+    m_device->CreateConstantBufferView(
+        &cbvDesc,
+        m_descHeap->GetCPUDescriptorHandleForHeapStart()
+    );
+}
+
+void D3DEngine::createDescriptorHeap()
+{
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        .NumDescriptors = 1,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        .NodeMask = 0
+    };
+    HRESULT hr = m_device->CreateDescriptorHeap(
+        &heapDesc,
+        IID_PPV_ARGS(&m_descHeap)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create descriptor heap." << std::endl;
+        return;
+    }
 }
