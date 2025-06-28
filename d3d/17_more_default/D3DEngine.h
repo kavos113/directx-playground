@@ -83,6 +83,16 @@ private:
     void createViewport(HWND hwnd);
 
     void loadTexture(const wchar_t *fileName);
+    void createBuffer(
+        UINT64 size,
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer,
+        D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState
+    );
+    void copyBuffer(
+        Microsoft::WRL::ComPtr<ID3D12Resource> srcBuffer,
+        Microsoft::WRL::ComPtr<ID3D12Resource> dstBuffer,
+    );
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex) const;
