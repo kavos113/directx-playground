@@ -5,6 +5,8 @@
 #include <array>
 #include <iostream>
 
+#define AlignCBuffer(x) (((x) + 0xff) & ~0xff)
+
 D3DEngine::D3DEngine(HWND hwnd)
 {
 #ifdef DEBUG
@@ -36,17 +38,19 @@ D3DEngine::~D3DEngine() = default;
 
 void D3DEngine::cleanup()
 {
-    waitForFence();
+    waitForFence(m_commandQueue);
 
     CloseHandle(m_fenceEvent);
 
     m_fence.Reset();
 
     m_commandList.Reset();
+    m_copyCommandList.Reset();
 
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
     m_colorBuffer.Reset();
+    m_texture.Reset();
     m_descHeap.Reset();
 
     m_rootSignature.Reset();
@@ -61,6 +65,8 @@ void D3DEngine::cleanup()
 
     m_commandQueue.Reset();
     m_commandAllocator.Reset();
+    m_copyCommandQueue.Reset();
+    m_copyCommandAllocator.Reset();
 
     m_debug->cleanup(m_device);
     m_debug.reset();
@@ -260,8 +266,14 @@ void D3DEngine::createCommandResources()
         return;
     }
 
+    D3D12_COMMAND_QUEUE_DESC copyQueueDesc = {
+        .Type = D3D12_COMMAND_LIST_TYPE_COPY,
+        .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
+        .NodeMask = 0
+    };
     hr = m_device->CreateCommandQueue(
-        &queueDesc,
+        &copyQueueDesc,
         IID_PPV_ARGS(&m_copyCommandQueue)
     );
     if (FAILED(hr))
@@ -443,7 +455,7 @@ void D3DEngine::endFrame(UINT frameIndex)
     std::array<ID3D12CommandList*, 1> commandLists = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
 
-    waitForFence();
+    waitForFence(m_commandQueue);
 
     hr = m_commandAllocator->Reset();
     if (FAILED(hr))
@@ -467,11 +479,11 @@ void D3DEngine::endFrame(UINT frameIndex)
     }
 }
 
-void D3DEngine::waitForFence()
+void D3DEngine::waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue)
 {
     m_fenceValue++;
     UINT64 fenceValue = m_fenceValue;
-    HRESULT hr = m_commandQueue->Signal(m_fence.Get(), fenceValue);
+    HRESULT hr = queue->Signal(m_fence.Get(), fenceValue);
     if (FAILED(hr))
     {
         std::cerr << "Failed to signal command queue." << std::endl;
@@ -829,7 +841,7 @@ void D3DEngine::createColorBuffer()
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
         .Alignment = 0,
-        .Width = (sizeof(float) * m_color.size()) + 0xff & ~0xff, // Must be a multiple of 256 bytes
+        .Width = AlignCBuffer(sizeof(float) * m_color.size()),
         .Height = 1,
         .DepthOrArraySize = 1,
         .MipLevels = 1,
@@ -921,13 +933,12 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
     const DirectX::Image *image = scratchImage.GetImage(0, 0, 0);
 
     D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_CUSTOM,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_L0,
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
         .CreationNodeMask = 0,
         .VisibleNodeMask = 0
     };
-
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Alignment = 0,
@@ -940,12 +951,11 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
-
     hr = m_device->CreateCommittedResource(
         &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
         IID_PPV_ARGS(&m_texture)
     );
@@ -955,18 +965,127 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
         return;
     }
 
-    hr = m_texture->WriteToSubresource(
-        0,
+    D3D12_HEAP_PROPERTIES stageHeapProperties = {
+        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+    D3D12_RESOURCE_DESC stageResourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = AlignCBuffer(image->rowPitch) * image->height,
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+    Microsoft::WRL::ComPtr<ID3D12Resource> stagingResource;
+    hr = m_device->CreateCommittedResource(
+        &stageHeapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &stageResourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        image->pixels,
-        image->rowPitch,
-        image->slicePitch
+        IID_PPV_ARGS(&stagingResource)
     );
     if (FAILED(hr))
     {
-        std::cerr << "Failed to write texture data to subresource." << std::endl;
+        std::cerr << "Failed to create staging resource for texture upload." << std::endl;
         return;
     }
+
+    uint8_t *mappedData = nullptr;
+    hr = stagingResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedData));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map staging resource for texture upload." << std::endl;
+        return;
+    }
+
+    for (UINT y = 0; y < metadata.height; ++y)
+    {
+        std::memcpy(
+            mappedData + y * image->rowPitch,
+            image->pixels + y * image->rowPitch,
+            image->rowPitch
+        );
+    }
+    stagingResource->Unmap(0, nullptr);
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
+    UINT64 requiredSize = 0;
+    m_device->GetCopyableFootprints(
+        &resourceDesc,
+        0,
+        1,
+        0,
+        &layout,
+        nullptr,
+        nullptr,
+        &requiredSize
+    );
+
+    D3D12_TEXTURE_COPY_LOCATION srcLocation = {
+        .pResource = stagingResource.Get(),
+        .Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+        .PlacedFootprint = layout
+    };
+
+    D3D12_TEXTURE_COPY_LOCATION dstLocation = {
+        .pResource = m_texture.Get(),
+        .Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+        .SubresourceIndex = 0
+    };
+
+    m_copyCommandList->CopyTextureRegion(
+        &dstLocation,
+        0, 0, 0,
+        &srcLocation,
+        nullptr
+    );
+
+    hr = m_copyCommandList->Close();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to close copy command list." << std::endl;
+        return;
+    }
+
+    std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
+    m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+
+    waitForFence(m_copyCommandQueue);
+
+    hr = m_copyCommandAllocator->Reset();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset copy command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_copyCommandList->Reset(m_copyCommandAllocator.Get(), nullptr);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset copy command list." << std::endl;
+        return;
+    }
+
+    D3D12_RESOURCE_BARRIER barrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition = {
+            .pResource = m_texture.Get(),
+            .Subresource = 0,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+            .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        }
+    };
+    m_commandList->ResourceBarrier(1, &barrier);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
         .Format = metadata.format,

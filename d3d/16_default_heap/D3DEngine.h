@@ -88,7 +88,7 @@ private:
     void recordCommands(UINT frameIndex) const;
     void endFrame(UINT frameIndex);
 
-    void waitForFence();
+    void waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue);
 
     std::unique_ptr<Debug> m_debug;
 
