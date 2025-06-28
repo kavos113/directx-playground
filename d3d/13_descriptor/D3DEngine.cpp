@@ -355,13 +355,19 @@ void D3DEngine::beginFrame(UINT frameIndex)
 
 void D3DEngine::recordCommands(UINT frameIndex) const
 {
-    m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
     m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
     m_commandList->IASetIndexBuffer(&m_indexBufferView);
+
+    m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+    m_commandList->SetDescriptorHeaps(1, m_rtvHeap.GetAddressOf());
+    m_commandList->SetGraphicsRootDescriptorTable(
+        0, // Root parameter index
+        m_rtvHeap->GetGPUDescriptorHandleForHeapStart()
+    );
 
     m_commandList->SetPipelineState(m_pipelineState.Get());
 
@@ -609,9 +615,25 @@ void D3DEngine::createPipelineState()
 
     Microsoft::WRL::ComPtr<ID3D10Blob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
+
+    D3D12_DESCRIPTOR_RANGE descriptorRange = {
+        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+        .NumDescriptors = 1,
+        .BaseShaderRegister = 0,
+        .RegisterSpace = 0,
+        .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+    };
+    D3D12_ROOT_PARAMETER rootParameter = {
+        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL,
+        .DescriptorTable = {
+            .NumDescriptorRanges = 1,
+            .pDescriptorRanges = &descriptorRange
+        }
+    };
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
-        .NumParameters = 0,
-        .pParameters = nullptr,
+        .NumParameters = 1,
+        .pParameters = &rootParameter,
         .NumStaticSamplers = 0,
         .pStaticSamplers = nullptr,
         .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
