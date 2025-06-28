@@ -520,3 +520,116 @@ Microsoft::WRL::ComPtr<ID3D10Blob> D3DEngine::compileShader(
 
     return shaderBlob;
 }
+
+void D3DEngine::createPipelineState()
+{
+    auto ps = compileShader(L"shader.hlsl", "PSMain", "ps_5_0");
+    if (!ps)
+    {
+        std::cerr << "Failed to compile pixel shader." << std::endl;
+        return;
+    }
+
+    auto vs = compileShader(L"shader.hlsl", "VSMain", "vs_5_0");
+    if (!vs)
+    {
+        std::cerr << "Failed to compile vertex shader." << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+    Microsoft::WRL::ComPtr<ID3D10Blob> signatureBlob;
+    Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+        .NumParameters = 0,
+        .pParameters = nullptr,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+    };
+    HRESULT hr = D3D12SerializeRootSignature(
+        &rootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signatureBlob,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to serialize root signature." << std::endl;
+        if (errorBlob)
+        {
+            std::string errorMessage(static_cast<const char*>(errorBlob->GetBufferPointer()), errorBlob->GetBufferSize());
+            std::cerr << "Error: " << errorMessage << std::endl;
+        }
+        return;
+    }
+    hr = m_device->CreateRootSignature(
+        0,
+        signatureBlob->GetBufferPointer(),
+        signatureBlob->GetBufferSize(),
+        IID_PPV_ARGS(&rootSignature)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create root signature." << std::endl;
+        return;
+    }
+
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineDesc = {
+        .pRootSignature = rootSignature.Get(),
+        .VS = {
+            .pShaderBytecode = vs->GetBufferPointer(),
+            .BytecodeLength = vs->GetBufferSize()
+        },
+        .PS = {
+            .pShaderBytecode = ps->GetBufferPointer(),
+            .BytecodeLength = ps->GetBufferSize()
+        },
+        .BlendState = {
+            .AlphaToCoverageEnable = FALSE,
+            .IndependentBlendEnable = FALSE,
+            .RenderTarget = {
+                {
+                    .BlendEnable = FALSE,
+                    .LogicOpEnable = FALSE,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+        .RasterizerState = {
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_NONE,
+            .FrontCounterClockwise = FALSE,
+            .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
+            .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+            .SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+            .DepthClipEnable = TRUE,
+            .MultisampleEnable = FALSE,
+            .AntialiasedLineEnable = FALSE,
+            .ForcedSampleCount = 0,
+            .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+        },
+        .InputLayout = {
+            .pInputElementDescs = Vertex::inputLayout().data(),
+            .NumElements = static_cast<UINT>(Vertex::inputLayout().size())
+        },
+        .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .NumRenderTargets = 1,
+        .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .DSVFormat = DXGI_FORMAT_D32_FLOAT,
+        .SampleDesc = { 1, 0 },
+        .NodeMask = 0,
+        .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+    };
+    hr = m_device->CreateGraphicsPipelineState(
+        &graphicsPipelineDesc,
+        IID_PPV_ARGS(&m_pipelineState)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create graphics pipeline state." << std::endl;
+        return;
+    }
+}

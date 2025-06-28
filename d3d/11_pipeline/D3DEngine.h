@@ -76,6 +76,8 @@ private:
         UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG
     );
 
+    void createPipelineState();
+
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
     void endFrame(UINT frameIndex);
@@ -117,6 +119,8 @@ private:
     };
 
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 };
 
 
