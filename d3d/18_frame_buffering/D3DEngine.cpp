@@ -40,11 +40,20 @@ D3DEngine::~D3DEngine() = default;
 
 void D3DEngine::cleanup()
 {
-    waitForFence(m_commandQueue);
+    for (UINT i = 0; i < FRAME_COUNT; ++i)
+    {
+        waitForFence(m_commandQueue, i);
+    }
 
-    CloseHandle(m_fenceEvent);
+    for (const auto & event : m_fenceEvents)
+    {
+        CloseHandle(event);
+    }
 
-    m_fence.Reset();
+    for (auto & fence : m_fence)
+    {
+        fence.Reset();
+    }
 
     m_commandList.Reset();
     m_copyCommandList.Reset();
@@ -66,7 +75,10 @@ void D3DEngine::cleanup()
     m_swapchain.Reset();
 
     m_commandQueue.Reset();
-    m_commandAllocator.Reset();
+    for (auto& allocator : m_commandAllocators)
+    {
+        allocator.Reset();
+    }
     m_copyCommandQueue.Reset();
     m_copyCommandAllocator.Reset();
 
@@ -206,20 +218,23 @@ void D3DEngine::createDevice()
 
 void D3DEngine::createCommandResources()
 {
-    HRESULT hr = m_device->CreateCommandAllocator(
-        D3D12_COMMAND_LIST_TYPE_DIRECT,
-        IID_PPV_ARGS(&m_commandAllocator)
-    );
-    if (FAILED(hr))
+    for (UINT i = 0; i < FRAME_COUNT; ++i)
     {
-        std::cerr << "Failed to create command allocator." << std::endl;
-        return;
+        HRESULT hr = m_device->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&m_commandAllocators[i])
+        );
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to create command allocator." << std::endl;
+            return;
+        }
     }
 
-    hr = m_device->CreateCommandList(
+    HRESULT hr = m_device->CreateCommandList(
         0,
         D3D12_COMMAND_LIST_TYPE_DIRECT,
-        m_commandAllocator.Get(),
+        m_commandAllocators[0].Get(),
         nullptr,
         IID_PPV_ARGS(&m_commandList)
     );
@@ -364,34 +379,45 @@ void D3DEngine::createSwapChainResources()
 
 void D3DEngine::createFence()
 {
-    HRESULT hr = m_device->CreateFence(
-        0,
-        D3D12_FENCE_FLAG_NONE,
-        IID_PPV_ARGS(&m_fence)
-    );
-    if (FAILED(hr))
+    for (UINT i = 0; i < FRAME_COUNT; ++i)
     {
-        std::cerr << "Failed to create fence." << std::endl;
-        return;
-    }
+        m_fenceValues[i] = 0;
+        m_fenceEvents[i] = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (!m_fenceEvents[i])
+        {
+            std::cerr << "Failed to create fence event." << std::endl;
+            return;
+        }
 
-    m_fenceValue = 0;
-
-    m_fenceEvent = CreateEvent(
-        nullptr,
-        FALSE,
-        FALSE,
-        nullptr
-    );
-    if (!m_fenceEvent)
-    {
-        std::cerr << "Failed to create fence event." << std::endl;
-        return;
+        HRESULT hr = m_device->CreateFence(
+            0,
+            D3D12_FENCE_FLAG_NONE,
+            IID_PPV_ARGS(&m_fence[i])
+        );
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to create fence." << std::endl;
+            return;
+        }
     }
 }
 
 void D3DEngine::beginFrame(UINT frameIndex)
 {
+    HRESULT hr = m_commandAllocators[frameIndex]->Reset();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_commandList->Reset(m_commandAllocators[frameIndex].Get(), nullptr);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to reset command list." << std::endl;
+        return;
+    }
+
     D3D12_RESOURCE_BARRIER barrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -457,21 +483,7 @@ void D3DEngine::endFrame(UINT frameIndex)
     std::array<ID3D12CommandList*, 1> commandLists = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
 
-    waitForFence(m_commandQueue);
-
-    hr = m_commandAllocator->Reset();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset command allocator." << std::endl;
-        return;
-    }
-
-    hr = m_commandList->Reset(m_commandAllocator.Get(), nullptr);
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset command list." << std::endl;
-        return;
-    }
+    waitForFence(m_commandQueue, frameIndex);
 
     hr = m_swapchain->Present(1, 0);
     if (FAILED(hr))
@@ -481,26 +493,26 @@ void D3DEngine::endFrame(UINT frameIndex)
     }
 }
 
-void D3DEngine::waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue)
+void D3DEngine::waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue, UINT frameIndex)
 {
-    m_fenceValue++;
-    UINT64 fenceValue = m_fenceValue;
-    HRESULT hr = queue->Signal(m_fence.Get(), fenceValue);
+    m_fenceValues[frameIndex]++;
+    UINT64 fenceValue = m_fenceValues[frameIndex];
+    HRESULT hr = queue->Signal(m_fence[frameIndex].Get(), fenceValue);
     if (FAILED(hr))
     {
         std::cerr << "Failed to signal command queue." << std::endl;
         return;
     }
 
-    if (m_fence->GetCompletedValue() < fenceValue)
+    if (m_fence[frameIndex]->GetCompletedValue() < fenceValue)
     {
-        hr = m_fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
+        hr = m_fence[frameIndex]->SetEventOnCompletion(fenceValue, m_fenceEvents[frameIndex]);
         if (FAILED(hr))
         {
             std::cerr << "Failed to set event on fence completion." << std::endl;
             return;
         }
-        WaitForSingleObject(m_fenceEvent, INFINITE);
+        WaitForSingleObject(m_fenceEvents[frameIndex], INFINITE);
     }
 }
 
@@ -1131,10 +1143,17 @@ void D3DEngine::executeCopy()
         return;
     }
 
+    hr = m_commandList->Close();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to close command list." << std::endl;
+        return;
+    }
+
     std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
     m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
 
-    waitForFence(m_copyCommandQueue);
+    waitForFence(m_copyCommandQueue, 0);
 
     hr = m_copyCommandAllocator->Reset();
     if (FAILED(hr))
@@ -1151,4 +1170,9 @@ void D3DEngine::executeCopy()
     }
 
     m_waitForCopyResources.clear();
+
+    commandLists = { m_commandList.Get() };
+    m_commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+
+    waitForFence(m_commandQueue, 0);
 }

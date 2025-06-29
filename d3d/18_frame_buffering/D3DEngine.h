@@ -110,7 +110,7 @@ private:
     void recordCommands(UINT frameIndex) const;
     void endFrame(UINT frameIndex);
 
-    void waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue);
+    void waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue, UINT frameIndex);
 
     std::unique_ptr<Debug> m_debug;
 
@@ -118,7 +118,7 @@ private:
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+    std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, FRAME_COUNT> m_commandAllocators;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
 
@@ -131,9 +131,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
     std::array<float, 4> m_clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
-    Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
-    UINT64 m_fenceValue = 0;
-    HANDLE m_fenceEvent = nullptr;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Fence>, FRAME_COUNT> m_fence;
+    std::array<UINT64, FRAME_COUNT> m_fenceValues = {};
+    std::array<HANDLE, FRAME_COUNT> m_fenceEvents = {};
 
     const std::vector<Vertex> m_vertices = {
         {
