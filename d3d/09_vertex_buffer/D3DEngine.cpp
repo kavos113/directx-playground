@@ -460,14 +460,14 @@ void D3DEngine::createVertexBuffer()
         return;
     }
 
-    DirectX::XMFLOAT3 *vertexMap = nullptr;
+    Vertex *vertexMap = nullptr;
     hr = vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map vertex buffer." << std::endl;
         return;
     }
-    std::copy(m_vertices.begin(), m_vertices.end(), vertexMap);
+    std::ranges::copy(m_vertices, vertexMap);
     vertexBuffer->Unmap(0, nullptr);
 
     m_vertexBufferView = {

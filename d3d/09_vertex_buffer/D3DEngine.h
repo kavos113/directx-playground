@@ -3,7 +3,6 @@
 
 #ifndef UNICODE
 #define UNICODE
-#include <vector>
 #endif
 #include <windows.h>
 
@@ -14,6 +13,7 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 #include "Debug.h"
 
