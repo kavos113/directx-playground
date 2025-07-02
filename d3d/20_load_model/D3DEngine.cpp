@@ -2,6 +2,9 @@
 
 #include <DirectXTex.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <array>
 #include <iostream>
 
@@ -24,6 +27,7 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     createDescriptorHeap();
 
+    loadModel();
     createVertexBuffer();
     createIndexBuffer();
     createColorBuffer();
@@ -1268,5 +1272,67 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
             &dsvDesc,
             dsvHandle
         );
+    }
+}
+
+void D3DEngine::loadModel()
+{
+    tinyobj::ObjReaderConfig readerConfig;
+    readerConfig.mtl_search_path = ".";
+
+    tinyobj::ObjReader reader;
+
+    if (!reader.ParseFromFile(MODEL_PATH.c_str(), readerConfig))
+    {
+        if (!reader.Error().empty())
+        {
+            std::cerr << "Failed to load model: " << reader.Error() << std::endl;
+        }
+        return;
+    }
+
+    if (!reader.Warning().empty())
+    {
+        std::cout << "Model load warning: " << reader.Warning() << std::endl;
+    }
+
+    auto& attrib = reader.GetAttrib();
+    auto& shapes = reader.GetShapes();
+
+    std::map<Vertex, unsigned short> uniqueVertices;
+
+    for (size_t s = 0; s < shapes.size(); ++s)
+    {
+        size_t indexOffset = 0;
+        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); ++f)
+        {
+            size_t fv = shapes[s].mesh.num_face_vertices[f];
+            for (size_t v = 0; v < fv; ++v)
+            {
+                tinyobj::index_t idx = shapes[s].mesh.indices[indexOffset + v];
+                Vertex vertex = {};
+                vertex.position = {
+                    attrib.vertices[3 * idx.vertex_index + 0],
+                    attrib.vertices[3 * idx.vertex_index + 1],
+                    attrib.vertices[3 * idx.vertex_index + 2]
+                };
+                if (idx.texcoord_index >= 0)
+                {
+                    vertex.uv = {
+                        attrib.texcoords[2 * idx.texcoord_index + 0],
+                        attrib.texcoords[2 * idx.texcoord_index + 1]
+                    };
+                }
+
+                if (!uniqueVertices.contains(vertex))
+                {
+                    uniqueVertices[vertex] = static_cast<unsigned short>(m_vertices.size());
+                    m_vertices.push_back(vertex);
+                }
+
+                m_indices.push_back(uniqueVertices[vertex]);
+            }
+            indexOffset += fv;
+        }
     }
 }

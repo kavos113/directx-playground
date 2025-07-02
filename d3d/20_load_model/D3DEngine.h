@@ -57,6 +57,13 @@ private:
                 }
             };
         }
+
+        bool operator< (const Vertex &other) const
+        {
+            return position.x < other.position.x ||
+                   (position.x == other.position.x && position.y < other.position.y) ||
+                   (position.x == other.position.x && position.y == other.position.y && position.z < other.position.z);
+        }
     };
 
     void createDXGIFactory();
@@ -68,6 +75,7 @@ private:
     void createDepthResources(UINT width, UINT height);
     void createFence();
 
+    void loadModel();
     void createVertexBuffer();
     void createIndexBuffer();
     void createColorBuffer();
@@ -117,6 +125,9 @@ private:
 
     static constexpr UINT FRAME_COUNT = 2;
 
+    const std::string MODEL_PATH = "utility_box.obj";
+    const std::string TEXTURE_PATH = "textures/utility_box_02_diff_1k.jpg";
+
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, FRAME_COUNT> m_commandAllocators;
@@ -138,28 +149,8 @@ private:
     std::array<UINT64, FRAME_COUNT> m_fenceValues = {};
     std::array<HANDLE, FRAME_COUNT> m_fenceEvents = {};
 
-    const std::vector<Vertex> m_vertices = {
-        {
-            {-0.5, -0.5f, 0.0f},
-            {0.0f, 1.0f}
-        },
-        {
-            {-0.5f, 0.5f, 0.0f},
-            {0.0f, 0.0f}
-        },
-        {
-            {0.5f, -0.5f, 0.0f},
-            {1.0f, 1.0f}
-        },
-        {
-            {0.5f, 0.5f, 0.0f},
-            {1.0f, 0.0f}
-        }
-    };
-    const std::vector<unsigned short> m_indices = {
-        0, 1, 2,
-        2, 1, 3
-    };
+    std::vector<Vertex> m_vertices;
+    std::vector<unsigned short> m_indices;
 
     const std::vector<float> m_color = {
         1.0f, 1.0f, 0.0f, 1.0f

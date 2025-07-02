@@ -11,6 +11,7 @@ add_executable(d3d_20_load_model
 )
 target_link_libraries(d3d_20_load_model PRIVATE d3d12 dxgi d3dcompiler)
 target_compile_definitions(d3d_20_load_model PRIVATE DEBUG)
+target_include_directories(d3d_20_load_model PRIVATE ${THIRD_PARTY_DIR})
 
 find_package(directxmath CONFIG REQUIRED)
 target_link_libraries(d3d_20_load_model PRIVATE Microsoft::DirectXMath)
@@ -20,3 +21,4 @@ target_link_libraries(d3d_20_load_model PRIVATE Microsoft::DirectXTex)
 
 file(COPY shader.hlsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${D3D_RESOURCES_DIR}/texture.png DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY ${D3D_RESOURCES_DIR}/models/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
