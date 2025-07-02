@@ -27,12 +27,12 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     createDescriptorHeap();
 
-    loadModel();
+    loadModel(MODEL_PATH);
     createVertexBuffer();
     createIndexBuffer();
     createColorBuffer();
 
-    loadTexture(L"texture.png");
+    loadTexture(TEXTURE_PATH);
 
     executeCopy();
 
@@ -915,13 +915,13 @@ void D3DEngine::createDescriptorHeap()
     }
 }
 
-void D3DEngine::loadTexture(const wchar_t *fileName)
+void D3DEngine::loadTexture(std::wstring path)
 {
     DirectX::TexMetadata metadata;
     DirectX::ScratchImage scratchImage;
 
     HRESULT hr = DirectX::LoadFromWICFile(
-        fileName,
+        path.c_str(),
         DirectX::WIC_FLAGS_NONE,
         &metadata,
         scratchImage
@@ -930,11 +930,11 @@ void D3DEngine::loadTexture(const wchar_t *fileName)
     {
         if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
         {
-            std::wcerr << L"Texture file not found: " << fileName << std::endl;
+            std::wcerr << L"Texture file not found: " << path << std::endl;
         }
         else
         {
-            std::wcerr << L"Failed to load texture from file: " << fileName << L" with error: " << std::hex << hr << std::endl;
+            std::wcerr << L"Failed to load texture from file: " << path << L" with error: " << std::hex << hr << std::endl;
         }
         return;
     }
@@ -1275,14 +1275,14 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
     }
 }
 
-void D3DEngine::loadModel()
+void D3DEngine::loadModel(const std::string &path)
 {
     tinyobj::ObjReaderConfig readerConfig;
     readerConfig.mtl_search_path = ".";
 
     tinyobj::ObjReader reader;
 
-    if (!reader.ParseFromFile(MODEL_PATH.c_str(), readerConfig))
+    if (!reader.ParseFromFile(path.c_str(), readerConfig))
     {
         if (!reader.Error().empty())
         {
@@ -1320,7 +1320,7 @@ void D3DEngine::loadModel()
                 {
                     vertex.uv = {
                         attrib.texcoords[2 * idx.texcoord_index + 0],
-                        attrib.texcoords[2 * idx.texcoord_index + 1]
+                        1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]
                     };
                 }
 

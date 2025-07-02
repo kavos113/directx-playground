@@ -75,7 +75,7 @@ private:
     void createDepthResources(UINT width, UINT height);
     void createFence();
 
-    void loadModel();
+    void loadModel(const std::string &path);
     void createVertexBuffer();
     void createIndexBuffer();
     void createColorBuffer();
@@ -91,7 +91,7 @@ private:
     void createPipelineState();
     void createViewport(HWND hwnd);
 
-    void loadTexture(const wchar_t *fileName);
+    void loadTexture(std::wstring path);
     void createBuffer(
         UINT64 size,
         ID3D12Resource **buffer,
@@ -126,7 +126,7 @@ private:
     static constexpr UINT FRAME_COUNT = 2;
 
     const std::string MODEL_PATH = "utility_box.obj";
-    const std::string TEXTURE_PATH = "textures/utility_box_02_diff_1k.jpg";
+    const std::wstring TEXTURE_PATH = L"textures/utility_box_02_diff_1k.jpg";
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
