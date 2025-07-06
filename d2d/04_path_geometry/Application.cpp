@@ -195,6 +195,50 @@ void Application::createResources()
         MessageBox(nullptr, L"Failed to create D2D stroke style", L"Error", MB_OK | MB_ICONERROR);
         return;
     }
+
+    hr = m_d2dFactory->CreatePathGeometry(&m_pathGeometry);
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D path geometry", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+    hr = m_pathGeometry->Open(&sink);
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to open D2D geometry sink", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    sink->SetFillMode(D2D1_FILL_MODE_WINDING);
+    sink->BeginFigure(
+        D2D1::Point2F(100.0f, 100.0f),
+        D2D1_FIGURE_BEGIN_FILLED
+    );
+    sink->AddLine(D2D1::Point2F(200.0f, 100.0f));
+    sink->AddArc(D2D1::ArcSegment(
+        D2D1::Point2F(200.0f, 200.0f),
+        D2D1::SizeF(50.0f, 50.0f),
+        0.0f, // Rotation angle
+        D2D1_SWEEP_DIRECTION_CLOCKWISE,
+        D2D1_ARC_SIZE_SMALL
+    ));
+    sink->AddLine(D2D1::Point2F(100.0f, 200.0f));
+    sink->AddArc(D2D1::ArcSegment(
+        D2D1::Point2F(100.0f, 100.0f),
+        D2D1::SizeF(50.0f, 50.0f),
+        0.0f, // Rotation angle
+        D2D1_SWEEP_DIRECTION_CLOCKWISE,
+        D2D1_ARC_SIZE_SMALL
+    ));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    hr = sink->Close();
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to close D2D geometry sink", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
 }
 
 void Application::onPaint()
@@ -205,30 +249,16 @@ void Application::onPaint()
     m_d2dContext->BeginDraw();
     m_d2dContext->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
 
-    m_d2dContext->FillRectangle(D2D1::RectF(100, 100, 300, 300), m_brush.Get());
-    m_d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(400, 200), 50, 50), m_brush.Get());
-    m_d2dContext->FillRoundedRectangle(
-        D2D1::RoundedRect(D2D1::RectF(500, 100, 700, 300), 40, 20),
-        m_brush.Get()
-    );
-    m_d2dContext->DrawLine(
-        D2D1::Point2F(100, 400),
-        D2D1::Point2F(300, 600),
+    m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+    m_d2dContext->DrawGeometry(
+        m_pathGeometry.Get(),
         m_brush.Get(),
-        15.0f,
+        2.0f, // Stroke width
         m_strokeStyle.Get()
     );
-    m_d2dContext->DrawRectangle(
-        D2D1::RectF(400, 400, 600, 600),
-        m_greenBrush.Get(),
-        10.0f,
-        m_strokeStyle.Get()
-    );
-    m_d2dContext->DrawEllipse(
-        D2D1::Ellipse(D2D1::Point2F(700, 500), 50, 50),
-        m_greenBrush.Get(),
-        3.0f,
-        m_strokeStyle.Get()
+    m_d2dContext->FillGeometry(
+        m_pathGeometry.Get(),
+        m_greenBrush.Get()
     );
 
     if (FAILED(m_d2dContext->EndDraw()))
