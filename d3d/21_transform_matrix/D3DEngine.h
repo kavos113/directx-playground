@@ -78,7 +78,6 @@ private:
     void loadModel(const std::string &path);
     void createVertexBuffer();
     void createIndexBuffer();
-    void createColorBuffer();
     void createDescriptorHeap();
 
     static Microsoft::WRL::ComPtr<ID3D10Blob> compileShader(
@@ -91,7 +90,7 @@ private:
     void createPipelineState();
     void createViewport(HWND hwnd);
 
-    void loadTexture(std::wstring path);
+    void loadTexture(const std::wstring& path);
     void createBuffer(
         UINT64 size,
         ID3D12Resource **buffer,
@@ -168,7 +167,6 @@ private:
     D3D12_RECT m_scissorRect = {};
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
 

@@ -30,7 +30,6 @@ D3DEngine::D3DEngine(HWND hwnd)
     loadModel(MODEL_PATH);
     createVertexBuffer();
     createIndexBuffer();
-    createColorBuffer();
 
     loadTexture(TEXTURE_PATH);
 
@@ -64,7 +63,6 @@ void D3DEngine::cleanup()
 
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
-    m_colorBuffer.Reset();
     m_texture.Reset();
     m_descHeap.Reset();
 
@@ -687,13 +685,6 @@ void D3DEngine::createPipelineState()
 
     std::array descriptorRanges = {
         D3D12_DESCRIPTOR_RANGE{
-            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-            .NumDescriptors = 1,
-            .BaseShaderRegister = 0,
-            .RegisterSpace = 0,
-            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
-        },
-        D3D12_DESCRIPTOR_RANGE{
             .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
             .NumDescriptors = 1,
             .BaseShaderRegister = 0,
@@ -846,61 +837,11 @@ void D3DEngine::createViewport(HWND hwnd)
     };
 }
 
-void D3DEngine::createColorBuffer()
-{
-    createBuffer(
-        AlignCBuffer(sizeof(float) * m_color.size()),
-        &m_colorBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
-    createBuffer(
-        AlignCBuffer(sizeof(float) * m_color.size()),
-        &stagingBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    float *colorMap = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map color buffer." << std::endl;
-        return;
-    }
-    std::ranges::copy(m_color, colorMap);
-    stagingBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingBuffer, m_colorBuffer);
-
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_colorBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(m_colorBuffer->GetDesc().Width) // Must be a multiple of 256 bytes
-    };
-
-    m_device->CreateConstantBufferView(
-        &cbvDesc,
-        m_descHeap->GetCPUDescriptorHandleForHeapStart()
-    );
-
-    barrier(
-        m_colorBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
-
-    m_waitForCopyResources.push_back(stagingBuffer);
-}
-
 void D3DEngine::createDescriptorHeap()
 {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 2,
+        .NumDescriptors = 1,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         .NodeMask = 0
     };
@@ -915,7 +856,7 @@ void D3DEngine::createDescriptorHeap()
     }
 }
 
-void D3DEngine::loadTexture(std::wstring path)
+void D3DEngine::loadTexture(const std::wstring& path)
 {
     DirectX::TexMetadata metadata;
     DirectX::ScratchImage scratchImage;
@@ -1030,7 +971,6 @@ void D3DEngine::loadTexture(std::wstring path)
     };
 
     D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     m_device->CreateShaderResourceView(
         m_texture.Get(),
