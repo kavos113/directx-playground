@@ -62,8 +62,23 @@ private:
         {
             return position.x < other.position.x ||
                    (position.x == other.position.x && position.y < other.position.y) ||
-                   (position.x == other.position.x && position.y == other.position.y && position.z < other.position.z);
+                   (position.x == other.position.x && position.y == other.position.y && position.z < other.position.z) ||
+                   (position.x == other.position.x && position.y == other.position.y && position.z == other.position.z && uv.x < other.uv.x) ||
+                   (position.x == other.position.x && position.y == other.position.y && position.z == other.position.z && uv.x == other.uv.x && uv.y < other.uv.y);
         }
+    };
+
+    struct MatrixBuffer
+    {
+        DirectX::XMMATRIX world;
+        DirectX::XMMATRIX view;
+        DirectX::XMMATRIX projection;
+
+        MatrixBuffer()
+            : world(DirectX::XMMatrixIdentity()),
+              view(DirectX::XMMatrixIdentity()),
+              projection(DirectX::XMMatrixIdentity())
+        {}
     };
 
     void createDXGIFactory();
@@ -78,6 +93,7 @@ private:
     void loadModel(const std::string &path);
     void createVertexBuffer();
     void createIndexBuffer();
+    void createMatrixBuffer(RECT rc);
     void createDescriptorHeap();
 
     static Microsoft::WRL::ComPtr<ID3D10Blob> compileShader(
@@ -167,6 +183,10 @@ private:
     D3D12_RECT m_scissorRect = {};
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+
+    float m_angle = 0.0f;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_matrixBuffer;
+    MatrixBuffer *m_matrixBufferData = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
 

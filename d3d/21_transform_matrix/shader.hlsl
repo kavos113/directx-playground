@@ -1,6 +1,13 @@
 Texture2D<float4> tex : register(t0);
 SamplerState samplerState : register(s0);
 
+cbuffer MatrixBuffer : register(b0)
+{
+    matrix world;
+    matrix view;
+    matrix projection;
+};
+
 struct vs_output
 {
     float4 position : SV_POSITION;
@@ -13,7 +20,7 @@ vs_output vs_main(
 )
 {
     vs_output output;
-    output.position = position;
+    output.position = mul(projection, mul(view, mul(world, position)));
     output.uv = texCoord;
     return output;
 }
