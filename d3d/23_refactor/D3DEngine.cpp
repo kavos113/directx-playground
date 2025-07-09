@@ -2,13 +2,8 @@
 
 #include <DirectXTex.h>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
-
 #include <array>
 #include <iostream>
-
-#define AlignCBuffer(x) (((x) + 0xff) & ~0xff)
 
 D3DEngine::D3DEngine(HWND hwnd)
 {
@@ -27,21 +22,20 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     createDescriptorHeap();
 
-    loadModel(MODEL_PATH);
-    createVertexBuffer();
-    createIndexBuffer();
-
     RECT rc;
     GetClientRect(hwnd, &rc);
-    createMatrixBuffer(rc);
-    createLightBuffer();
 
-    loadTexture(TEXTURE_PATH);
-
-    executeCopy();
+    m_model = std::make_unique<Model>(
+        m_device,
+        m_descHeap,
+        rc
+    );
 
     createPipelineState();
     createViewport(hwnd);
+
+    m_model->executeBarrier(m_commandList);
+    executeCommand(0);
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -63,12 +57,9 @@ void D3DEngine::cleanup()
         fence.Reset();
     }
 
-    m_commandList.Reset();
-    m_copyCommandList.Reset();
+    m_model->cleanup();
 
-    m_vertexBuffer.Reset();
-    m_indexBuffer.Reset();
-    m_texture.Reset();
+    m_commandList.Reset();
     m_descHeap.Reset();
 
     m_rootSignature.Reset();
@@ -92,8 +83,6 @@ void D3DEngine::cleanup()
     {
         allocator.Reset();
     }
-    m_copyCommandQueue.Reset();
-    m_copyCommandAllocator.Reset();
 
     m_debug->cleanup(m_device);
     m_debug.reset();
@@ -272,45 +261,6 @@ void D3DEngine::createCommandResources()
         std::cerr << "Failed to create command queue." << std::endl;
         return;
     }
-
-    hr = m_device->CreateCommandAllocator(
-        D3D12_COMMAND_LIST_TYPE_COPY,
-        IID_PPV_ARGS(&m_copyCommandAllocator)
-    );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create copy command allocator." << std::endl;
-        return;
-    }
-
-    hr = m_device->CreateCommandList(
-        0,
-        D3D12_COMMAND_LIST_TYPE_COPY,
-        m_copyCommandAllocator.Get(),
-        nullptr,
-        IID_PPV_ARGS(&m_copyCommandList)
-    );
-    if     (FAILED(hr))
-    {
-        std::cerr << "Failed to create copy command list." << std::endl;
-        return;
-    }
-
-    D3D12_COMMAND_QUEUE_DESC copyQueueDesc = {
-        .Type = D3D12_COMMAND_LIST_TYPE_COPY,
-        .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
-        .NodeMask = 0
-    };
-    hr = m_device->CreateCommandQueue(
-        &copyQueueDesc,
-        IID_PPV_ARGS(&m_copyCommandQueue)
-    );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create copy command queue." << std::endl;
-        return;
-    }
 }
 
 void D3DEngine::createSwapChain(HWND hwnd)
@@ -418,10 +368,6 @@ void D3DEngine::createFence()
 
 void D3DEngine::beginFrame(UINT frameIndex)
 {
-    m_angle += 0.01f;
-    DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
-    m_matrixBufferData->world = world;
-
     HRESULT hr = m_commandAllocators[frameIndex]->Reset();
     if (FAILED(hr))
     {
@@ -465,8 +411,6 @@ void D3DEngine::recordCommands(UINT frameIndex) const
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
     m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-    m_commandList->IASetIndexBuffer(&m_indexBufferView);
 
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
     m_commandList->SetDescriptorHeaps(1, m_descHeap.GetAddressOf());
@@ -478,7 +422,7 @@ void D3DEngine::recordCommands(UINT frameIndex) const
 
     m_commandList->SetPipelineState(m_pipelineState.Get());
 
-    m_commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
+    m_model->render(m_commandList);
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -495,6 +439,11 @@ void D3DEngine::endFrame(UINT frameIndex)
     };
     m_commandList->ResourceBarrier(1, &barrier);
 
+    executeCommand(frameIndex);
+}
+
+void D3DEngine::executeCommand(UINT frameIndex)
+{
     HRESULT hr = m_commandList->Close();
     if (FAILED(hr))
     {
@@ -536,192 +485,6 @@ void D3DEngine::waitForFence(const Microsoft::WRL::ComPtr<ID3D12CommandQueue>& q
         }
         WaitForSingleObject(m_fenceEvents[frameIndex], INFINITE);
     }
-}
-
-void D3DEngine::createVertexBuffer()
-{
-    createBuffer(
-        sizeof(Vertex) * m_vertices.size(),
-        &m_vertexBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
-    createBuffer(
-        sizeof(Vertex) * m_vertices.size(),
-        &stagingBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    Vertex *vertexMap = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map vertex buffer." << std::endl;
-        return;
-    }
-    std::ranges::copy(m_vertices, vertexMap);
-    stagingBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingBuffer, m_vertexBuffer);
-
-    m_vertexBufferView = {
-        .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
-        .StrideInBytes = sizeof(Vertex)
-    };
-
-    barrier(
-        m_vertexBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
-
-    m_waitForCopyResources.push_back(stagingBuffer);
-}
-
-void D3DEngine::createIndexBuffer()
-{
-    createBuffer(
-        sizeof(unsigned short) * m_indices.size(),
-        &m_indexBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
-    createBuffer(
-        sizeof(unsigned short) * m_indices.size(),
-        &stagingBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    unsigned short *indexMap = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map index buffer." << std::endl;
-        return;
-    }
-    std::ranges::copy(m_indices, indexMap);
-    stagingBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingBuffer, m_indexBuffer);
-
-    m_indexBufferView = {
-        .BufferLocation = m_indexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(unsigned short) * m_indices.size()),
-        .Format = DXGI_FORMAT_R16_UINT
-    };
-
-    barrier(
-        m_indexBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_INDEX_BUFFER
-    );
-
-    m_waitForCopyResources.push_back(stagingBuffer);
-}
-
-void D3DEngine::createMatrixBuffer(RECT rc)
-{
-    DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
-    DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
-        { 0.0f, 0.2f, -0.5f },
-        { 0.0f, 0.0f, 0.0f },
-        { 0.0f, 1.0f, 0.0f }
-    );
-    DirectX::XMMATRIX projection = DirectX::XMMatrixPerspectiveFovLH(
-        DirectX::XM_PIDIV2,
-        static_cast<float>(rc.right - rc.left) / static_cast<float>(rc.bottom - rc.top),
-        0.1f,
-        100.0f
-    );
-
-    createBuffer(
-        AlignCBuffer(sizeof(MatrixBuffer)),
-        &m_matrixBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    HRESULT hr = m_matrixBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_matrixBufferData));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map matrix buffer." << std::endl;
-        return;
-    }
-
-    m_matrixBufferData->world = world;
-    m_matrixBufferData->view = view;
-    m_matrixBufferData->projection = projection;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_matrixBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = AlignCBuffer(sizeof(MatrixBuffer))
-    };
-
-    m_device->CreateConstantBufferView(
-        &cbvDesc,
-        cbvHandle
-    );
-}
-
-void D3DEngine::createLightBuffer()
-{
-    DirectX::XMFLOAT3 direction{-1.0f, -3.0f, 1.0f};
-    DirectX::XMFLOAT3 ambient{0.3f, 0.3f, 0.3f};
-
-    createBuffer(
-        AlignCBuffer(sizeof(LightBuffer)),
-        &m_lightBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
-    createBuffer(
-        AlignCBuffer(sizeof(LightBuffer)),
-        &stagingBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    LightBuffer *map = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&map));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map light buffer." << std::endl;
-        return;
-    }
-    map->direction = direction;
-    map->ambient = ambient;
-    stagingBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingBuffer, m_lightBuffer);
-
-    m_waitForCopyResources.push_back(stagingBuffer);
-
-    barrier(
-        m_lightBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
-
-    D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    cbvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_lightBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = AlignCBuffer(sizeof(LightBuffer))
-    };
-    m_device->CreateConstantBufferView(
-        &cbvDesc,
-        cbvHandle
-    );
 }
 
 Microsoft::WRL::ComPtr<ID3D10Blob> D3DEngine::compileShader(
@@ -922,8 +685,8 @@ void D3DEngine::createPipelineState()
             .StencilEnable = FALSE,
         },
         .InputLayout = {
-            .pInputElementDescs = Vertex::inputLayout().data(),
-            .NumElements = static_cast<UINT>(Vertex::inputLayout().size())
+            .pInputElementDescs = Model::Vertex::inputLayout().data(),
+            .NumElements = static_cast<UINT>(Model::Vertex::inputLayout().size())
         },
         .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
         .NumRenderTargets = 1,
@@ -985,224 +748,6 @@ void D3DEngine::createDescriptorHeap()
     }
 }
 
-void D3DEngine::loadTexture(const std::wstring& path)
-{
-    DirectX::TexMetadata metadata{};
-    DirectX::ScratchImage scratchImage;
-
-    HRESULT hr = DirectX::LoadFromWICFile(
-        path.c_str(),
-        DirectX::WIC_FLAGS_NONE,
-        &metadata,
-        scratchImage
-    );
-    if (FAILED(hr))
-    {
-        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
-        {
-            std::wcerr << L"Texture file not found: " << path << std::endl;
-        }
-        else
-        {
-            std::wcerr << L"Failed to load texture from file: " << path << L" with error: " << std::hex << hr << std::endl;
-        }
-        return;
-    }
-
-    const DirectX::Image *image = scratchImage.GetImage(0, 0, 0);
-
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_DEFAULT,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
-    D3D12_RESOURCE_DESC resourceDesc = {
-        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        .Alignment = 0,
-        .Width = metadata.width,
-        .Height = static_cast<UINT>(metadata.height),
-        .DepthOrArraySize = static_cast<UINT16>(metadata.arraySize),
-        .MipLevels = static_cast<UINT16>(metadata.mipLevels),
-        .Format = metadata.format,
-        .SampleDesc = {1, 0},
-        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-        .Flags = D3D12_RESOURCE_FLAG_NONE
-    };
-    hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr,
-        IID_PPV_ARGS(&m_texture)
-    );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create texture resource." << std::endl;
-        return;
-    }
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingResource;
-    createBuffer(
-        AlignCBuffer(image->rowPitch) * image->height,
-        &stagingResource,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    uint8_t *mappedData = nullptr;
-    hr = stagingResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedData));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map staging resource for texture upload." << std::endl;
-        return;
-    }
-
-    for (UINT y = 0; y < metadata.height; ++y)
-    {
-        std::memcpy(
-            mappedData + y * image->rowPitch,
-            image->pixels + y * image->rowPitch,
-            image->rowPitch
-        );
-    }
-    stagingResource->Unmap(0, nullptr);
-
-    copyTexture(stagingResource, m_texture);
-
-    D3D12_RESOURCE_BARRIER barrier = {
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-        .Transition = {
-            .pResource = m_texture.Get(),
-            .Subresource = 0,
-            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
-            .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-        }
-    };
-    m_commandList->ResourceBarrier(1, &barrier);
-
-    m_waitForCopyResources.push_back(stagingResource);
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
-        .Format = metadata.format,
-        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-        .Texture2D = {
-            .MostDetailedMip = 0,
-            .MipLevels = static_cast<UINT>(metadata.mipLevels),
-            .PlaneSlice = 0,
-            .ResourceMinLODClamp = 0.0f
-        }
-    };
-
-    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    srvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-    m_device->CreateShaderResourceView(
-        m_texture.Get(),
-        &srvDesc,
-        srvHandle
-    );
-}
-
-// unsupported D3D12_HEAP_TYPE_CUSTOM
-// create simple buffer(not texture)
-void D3DEngine::createBuffer(
-    UINT64 size,
-    ID3D12Resource **buffer,
-    D3D12_HEAP_TYPE heapType,
-    D3D12_RESOURCE_STATES initialState
-)
-{
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = heapType,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
-
-    D3D12_RESOURCE_DESC resourceDesc = {
-        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-        .Alignment = 0,
-        .Width = size,
-        .Height = 1,
-        .DepthOrArraySize = 1,
-        .MipLevels = 1,
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .SampleDesc = {1, 0},
-        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR, // Dimension = Buffer must be LAYOUT_ROW_MAJOR
-        .Flags = D3D12_RESOURCE_FLAG_NONE
-    };
-    HRESULT hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDesc,
-        initialState,
-        nullptr,
-        IID_PPV_ARGS(buffer)
-    );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create buffer resource." << std::endl;
-        return;
-    }
-}
-
-void D3DEngine::copyTexture(
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
-) const
-{
-    D3D12_RESOURCE_DESC resourceDesc = dstBuffer->GetDesc();
-
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
-    UINT64 requiredSize = 0;
-    m_device->GetCopyableFootprints(
-        &resourceDesc,
-        0,
-        1,
-        0,
-        &layout,
-        nullptr,
-        nullptr,
-        &requiredSize
-    );
-
-    D3D12_TEXTURE_COPY_LOCATION srcLocation = {
-        .pResource = srcBuffer.Get(),
-        .Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-        .PlacedFootprint = layout
-    };
-
-    D3D12_TEXTURE_COPY_LOCATION dstLocation = {
-        .pResource = dstBuffer.Get(),
-        .Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-        .SubresourceIndex = 0
-    };
-
-    m_copyCommandList->CopyTextureRegion(
-        &dstLocation,
-        0, 0, 0,
-        &srcLocation,
-        nullptr
-    );
-}
-
-void D3DEngine::copyBuffer(
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
-) const
-{
-    m_copyCommandList->CopyResource(
-        dstBuffer.Get(),
-        srcBuffer.Get()
-    );
-}
-
 void D3DEngine::barrier(
     const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
     D3D12_RESOURCE_STATES beforeState,
@@ -1220,49 +765,6 @@ void D3DEngine::barrier(
         }
     };
     m_commandList->ResourceBarrier(1, &barrier);
-}
-
-void D3DEngine::executeCopy()
-{
-    HRESULT hr = m_copyCommandList->Close();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to close copy command list." << std::endl;
-        return;
-    }
-
-    hr = m_commandList->Close();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to close command list." << std::endl;
-        return;
-    }
-
-    std::array<ID3D12CommandList*, 1> commandLists = { m_copyCommandList.Get() };
-    m_copyCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
-
-    waitForFence(m_copyCommandQueue, 0);
-
-    hr = m_copyCommandAllocator->Reset();
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset copy command allocator." << std::endl;
-        return;
-    }
-
-    hr = m_copyCommandList->Reset(m_copyCommandAllocator.Get(), nullptr);
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to reset copy command list." << std::endl;
-        return;
-    }
-
-    m_waitForCopyResources.clear();
-
-    commandLists = { m_commandList.Get() };
-    m_commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
-
-    waitForFence(m_commandQueue, 0);
 }
 
 void D3DEngine::createDepthResources(UINT width, UINT height)
@@ -1340,77 +842,5 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
             &dsvDesc,
             dsvHandle
         );
-    }
-}
-
-void D3DEngine::loadModel(const std::string &path)
-{
-    tinyobj::ObjReaderConfig readerConfig;
-    readerConfig.mtl_search_path = ".";
-
-    tinyobj::ObjReader reader;
-
-    if (!reader.ParseFromFile(path, readerConfig))
-    {
-        if (!reader.Error().empty())
-        {
-            std::cerr << "Failed to load model: " << reader.Error() << std::endl;
-        }
-        return;
-    }
-
-    if (!reader.Warning().empty())
-    {
-        std::cout << "Model load warning: " << reader.Warning() << std::endl;
-    }
-
-    auto& attrib = reader.GetAttrib();
-    auto& shapes = reader.GetShapes();
-
-    std::map<Vertex, unsigned short> uniqueVertices;
-
-    for (const auto & shape : shapes)
-    {
-        size_t indexOffset = 0;
-        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); ++f)
-        {
-            size_t fv = shape.mesh.num_face_vertices[f];
-            for (size_t v = 0; v < fv; ++v)
-            {
-                tinyobj::index_t idx = shape.mesh.indices[indexOffset + v];
-                Vertex vertex = {};
-                vertex.position = {
-                    attrib.vertices[3 * idx.vertex_index + 0],
-                    attrib.vertices[3 * idx.vertex_index + 1],
-                    attrib.vertices[3 * idx.vertex_index + 2]
-                };
-
-                if (idx.normal_index >= 0)
-                {
-                    vertex.normal = {
-                        attrib.normals[3 * idx.normal_index + 0],
-                        attrib.normals[3 * idx.normal_index + 1],
-                        attrib.normals[3 * idx.normal_index + 2]
-                    };
-                }
-
-                if (idx.texcoord_index >= 0)
-                {
-                    vertex.uv = {
-                        attrib.texcoords[2 * idx.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]
-                    };
-                }
-
-                if (!uniqueVertices.contains(vertex))
-                {
-                    uniqueVertices[vertex] = static_cast<unsigned short>(m_vertices.size());
-                    m_vertices.push_back(vertex);
-                }
-
-                m_indices.push_back(uniqueVertices[vertex]);
-            }
-            indexOffset += fv;
-        }
     }
 }
