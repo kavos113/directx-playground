@@ -82,7 +82,7 @@ private:
     };
 
     void createDXGIFactory();
-    void getAdapter(IDXGIAdapter1 **adapter);
+    void getAdapter(IDXGIAdapter1 **adapter) const;
     void createDevice();
     void createCommandResources();
     void createSwapChain(HWND hwnd);
@@ -134,7 +134,7 @@ private:
     void recordCommands(UINT frameIndex) const;
     void endFrame(UINT frameIndex);
 
-    void waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue, UINT frameIndex);
+    void waitForFence(const Microsoft::WRL::ComPtr<ID3D12CommandQueue>& queue, UINT frameIndex);
 
     std::unique_ptr<Debug> m_debug;
 
@@ -156,7 +156,7 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
-    std::array<float, 4> m_clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    std::array<float, 4> m_clearColor = {1.0f, 1.0f, 1.0f, 1.0f};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_depthBuffers;
 
@@ -166,10 +166,6 @@ private:
 
     std::vector<Vertex> m_vertices;
     std::vector<unsigned short> m_indices;
-
-    const std::vector<float> m_color = {
-        1.0f, 1.0f, 0.0f, 1.0f
-    };
 
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;

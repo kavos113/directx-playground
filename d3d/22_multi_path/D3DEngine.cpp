@@ -120,7 +120,7 @@ void D3DEngine::createDXGIFactory()
     }
 }
 
-void D3DEngine::getAdapter(IDXGIAdapter1 **adapter)
+void D3DEngine::getAdapter(IDXGIAdapter1 **adapter) const
 {
     Microsoft::WRL::ComPtr<IDXGIAdapter1> localAdapter;
 
@@ -514,7 +514,7 @@ void D3DEngine::endFrame(UINT frameIndex)
     }
 }
 
-void D3DEngine::waitForFence(Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue, UINT frameIndex)
+void D3DEngine::waitForFence(const Microsoft::WRL::ComPtr<ID3D12CommandQueue>& queue, UINT frameIndex)
 {
     m_fenceValues[frameIndex]++;
     UINT64 fenceValue = m_fenceValues[frameIndex];
@@ -929,7 +929,7 @@ void D3DEngine::createDescriptorHeap()
 
 void D3DEngine::loadTexture(const std::wstring& path)
 {
-    DirectX::TexMetadata metadata;
+    DirectX::TexMetadata metadata{};
     DirectX::ScratchImage scratchImage;
 
     HRESULT hr = DirectX::LoadFromWICFile(
@@ -1294,7 +1294,7 @@ void D3DEngine::loadModel(const std::string &path)
 
     tinyobj::ObjReader reader;
 
-    if (!reader.ParseFromFile(path.c_str(), readerConfig))
+    if (!reader.ParseFromFile(path, readerConfig))
     {
         if (!reader.Error().empty())
         {
@@ -1313,15 +1313,15 @@ void D3DEngine::loadModel(const std::string &path)
 
     std::map<Vertex, unsigned short> uniqueVertices;
 
-    for (size_t s = 0; s < shapes.size(); ++s)
+    for (const auto & shape : shapes)
     {
         size_t indexOffset = 0;
-        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); ++f)
+        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); ++f)
         {
-            size_t fv = shapes[s].mesh.num_face_vertices[f];
+            size_t fv = shape.mesh.num_face_vertices[f];
             for (size_t v = 0; v < fv; ++v)
             {
-                tinyobj::index_t idx = shapes[s].mesh.indices[indexOffset + v];
+                tinyobj::index_t idx = shape.mesh.indices[indexOffset + v];
                 Vertex vertex = {};
                 vertex.position = {
                     attrib.vertices[3 * idx.vertex_index + 0],
