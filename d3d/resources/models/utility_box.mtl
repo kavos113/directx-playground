@@ -9,5 +9,5 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd C:/utility_box_02_diff_1k.jpg
-map_Bump -bm 1.000000 C:/utility_box_02_nor_gl_1k.jpg
+map_Kd textures/utility_box_02_diff_1k.jpg
+map_Bump -bm 1.000000 textures/utility_box_02_nor_gl_1k.jpg
