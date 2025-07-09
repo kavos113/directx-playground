@@ -50,6 +50,8 @@ private:
     void createPipelineState();
     void createViewport(HWND hwnd);
 
+    void createOutlinePipelineState();
+
     void barrier(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
         D3D12_RESOURCE_STATES beforeState,

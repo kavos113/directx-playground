@@ -22,7 +22,7 @@ public:
     void cleanup();
     void executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const;
 
-    void render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList);
+    void render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList);
 
     struct Vertex
     {

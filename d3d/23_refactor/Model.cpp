@@ -48,7 +48,7 @@ void Model::cleanup()
     m_copyCommandAllocator.Reset();
 }
 
-void Model::render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList)
+void Model::render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList)
 {
     m_angle += 0.01f;
     DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);

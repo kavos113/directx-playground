@@ -22,7 +22,9 @@ public:
     void cleanup();
     void executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const;
 
-    void render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList);
+    void update();
+    void beforeRender(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList);
+    void render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList);
 
     struct Vertex
     {
@@ -80,6 +82,7 @@ private:
         DirectX::XMMATRIX world;
         DirectX::XMMATRIX view;
         DirectX::XMMATRIX projection;
+        float outlineWidth;
     };
 
     struct LightBuffer
@@ -151,6 +154,8 @@ private:
 
     const std::string MODEL_PATH = "security_camera_01_2k.obj";
     const std::wstring TEXTURE_PATH = L"textures/security_camera_01_diff_2k.jpg";
+
+    const float OUTLINE_WIDTH = 0.005f;
 };
 
 

@@ -34,6 +34,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     createPipelineState();
     createViewport(hwnd);
 
+    createOutlinePipelineState();
+
     m_model->executeBarrier(m_commandList);
     executeCommand(0);
 }
@@ -368,6 +370,8 @@ void D3DEngine::createFence()
 
 void D3DEngine::beginFrame(UINT frameIndex)
 {
+    m_model->update();
+
     HRESULT hr = m_commandAllocators[frameIndex]->Reset();
     if (FAILED(hr))
     {
@@ -412,16 +416,23 @@ void D3DEngine::recordCommands(UINT frameIndex) const
 
     m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    m_model->beforeRender(m_commandList);
+
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
     m_commandList->SetDescriptorHeaps(1, m_descHeap.GetAddressOf());
 
     auto gpuHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart();
     m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+
+    m_commandList->SetPipelineState(m_outlinePipelineState.Get());
+    m_model->render(m_commandList);
+
+    gpuHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart();
+    m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
     gpuHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
 
     m_commandList->SetPipelineState(m_pipelineState.Get());
-
     m_model->render(m_commandList);
 }
 
@@ -842,5 +853,85 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
             &dsvDesc,
             dsvHandle
         );
+    }
+}
+
+void D3DEngine::createOutlinePipelineState()
+{
+    auto vs = compileShader(L"outline.hlsl", "vs_main", "vs_5_0");
+    if (!vs)
+    {
+        std::cerr << "Failed to compile outline vertex shader." << std::endl;
+        return;
+    }
+
+    auto ps = compileShader(L"outline.hlsl", "ps_main", "ps_5_0");
+    if (!ps)
+    {
+        std::cerr << "Failed to compile outline pixel shader." << std::endl;
+        return;
+    }
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineDesc = {
+        .pRootSignature = m_rootSignature.Get(),
+        .VS = {
+            .pShaderBytecode = vs->GetBufferPointer(),
+            .BytecodeLength = vs->GetBufferSize()
+        },
+        .PS = {
+            .pShaderBytecode = ps->GetBufferPointer(),
+            .BytecodeLength = ps->GetBufferSize()
+        },
+        .BlendState = {
+            .AlphaToCoverageEnable = FALSE,
+            .IndependentBlendEnable = FALSE,
+            .RenderTarget = {
+                {
+                    .BlendEnable = FALSE,
+                    .LogicOpEnable = FALSE,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+        .RasterizerState = {
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_FRONT,
+            .FrontCounterClockwise = FALSE,
+            .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
+            .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+            .SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+            .DepthClipEnable = TRUE,
+            .MultisampleEnable = FALSE,
+            .AntialiasedLineEnable = FALSE,
+            .ForcedSampleCount = 0,
+            .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+        },
+        .DepthStencilState = {
+            .DepthEnable = TRUE,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = FALSE,
+        },
+        .InputLayout = {
+            .pInputElementDescs = Model::Vertex::inputLayout().data(),
+            .NumElements = static_cast<UINT>(Model::Vertex::inputLayout().size())
+        },
+        .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .NumRenderTargets = 1,
+        .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .DSVFormat = DXGI_FORMAT_D32_FLOAT,
+        .SampleDesc = { 1, 0 },
+        .NodeMask = 0,
+        .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+    };
+    HRESULT hr = m_device->CreateGraphicsPipelineState(
+        &graphicsPipelineDesc,
+        IID_PPV_ARGS(&m_outlinePipelineState)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create graphics pipeline state." << std::endl;
+        return;
     }
 }

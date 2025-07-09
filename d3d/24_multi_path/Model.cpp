@@ -48,15 +48,21 @@ void Model::cleanup()
     m_copyCommandAllocator.Reset();
 }
 
-void Model::render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList)
+void Model::update()
 {
     m_angle += 0.01f;
     DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
     m_matrixBufferData->world = world;
+}
 
+void Model::beforeRender(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList)
+{
     commandList->IASetIndexBuffer(&m_indexBufferView);
     commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+}
 
+void Model::render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList)
+{
     commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
 }
 
@@ -321,6 +327,7 @@ void Model::createMatrixBuffer(RECT rc)
     m_matrixBufferData->world = world;
     m_matrixBufferData->view = view;
     m_matrixBufferData->projection = projection;
+    m_matrixBufferData->outlineWidth = OUTLINE_WIDTH;
 
     D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
