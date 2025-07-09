@@ -1328,6 +1328,16 @@ void D3DEngine::loadModel(const std::string &path)
                     attrib.vertices[3 * idx.vertex_index + 1],
                     attrib.vertices[3 * idx.vertex_index + 2]
                 };
+
+                if (idx.normal_index >= 0)
+                {
+                    vertex.normal = {
+                        attrib.normals[3 * idx.normal_index + 0],
+                        attrib.normals[3 * idx.normal_index + 1],
+                        attrib.normals[3 * idx.normal_index + 2]
+                    };
+                }
+
                 if (idx.texcoord_index >= 0)
                 {
                     vertex.uv = {

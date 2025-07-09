@@ -16,6 +16,7 @@ struct vs_output
 
 vs_output vs_main(
     float4 position : POSITION,
+    float3 normal : NORMAL,
     float2 texCoord : TEXCOORD
 )
 {
