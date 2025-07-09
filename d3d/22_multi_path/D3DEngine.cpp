@@ -417,7 +417,7 @@ void D3DEngine::createFence()
 
 void D3DEngine::beginFrame(UINT frameIndex)
 {
-    m_angle += 0.05f;
+    m_angle += 0.02f;
     DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
     m_matrixBufferData->world = world;
 
@@ -633,7 +633,7 @@ void D3DEngine::createMatrixBuffer(RECT rc)
 {
     DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
     DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
-        { 0.0f, 0.5f, -2.0f },
+        { 0.0f, 0.1f, -0.5f },
         { 0.0f, 0.0f, 0.0f },
         { 0.0f, 1.0f, 0.0f }
     );
@@ -846,7 +846,7 @@ void D3DEngine::createPipelineState()
         .SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
         .RasterizerState = {
             .FillMode = D3D12_FILL_MODE_SOLID,
-            .CullMode = D3D12_CULL_MODE_NONE,
+            .CullMode = D3D12_CULL_MODE_BACK,
             .FrontCounterClockwise = FALSE,
             .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
             .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,

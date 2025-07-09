@@ -140,8 +140,8 @@ private:
 
     static constexpr UINT FRAME_COUNT = 2;
 
-    const std::string MODEL_PATH = "utility_box.obj";
-    const std::wstring TEXTURE_PATH = L"textures/utility_box_02_diff_1k.jpg";
+    const std::string MODEL_PATH = "security_camera_01_2k.obj";
+    const std::wstring TEXTURE_PATH = L"textures/security_camera_01_diff_2k.jpg";
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
