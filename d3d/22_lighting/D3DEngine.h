@@ -103,6 +103,7 @@ private:
     void createVertexBuffer();
     void createIndexBuffer();
     void createMatrixBuffer(RECT rc);
+    void createLightBuffer();
     void createDescriptorHeap();
 
     static Microsoft::WRL::ComPtr<ID3D10Blob> compileShader(
@@ -120,7 +121,6 @@ private:
         UINT64 size,
         ID3D12Resource **buffer,
         D3D12_HEAP_TYPE heapType,
-        D3D12_TEXTURE_LAYOUT layout,
         D3D12_RESOURCE_STATES initialState
     );
     void copyTexture(
@@ -192,6 +192,8 @@ private:
     float m_angle = 0.0f;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_matrixBuffer;
     MatrixBuffer *m_matrixBufferData = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_lightBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
 

@@ -34,6 +34,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     RECT rc;
     GetClientRect(hwnd, &rc);
     createMatrixBuffer(rc);
+    createLightBuffer();
 
     loadTexture(TEXTURE_PATH);
 
@@ -543,7 +544,6 @@ void D3DEngine::createVertexBuffer()
         sizeof(Vertex) * m_vertices.size(),
         &m_vertexBuffer,
         D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_COMMON
     );
 
@@ -552,7 +552,6 @@ void D3DEngine::createVertexBuffer()
         sizeof(Vertex) * m_vertices.size(),
         &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
@@ -589,7 +588,6 @@ void D3DEngine::createIndexBuffer()
         sizeof(unsigned short) * m_indices.size(),
         &m_indexBuffer,
         D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_COMMON
     );
 
@@ -598,7 +596,6 @@ void D3DEngine::createIndexBuffer()
         sizeof(unsigned short) * m_indices.size(),
         &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
@@ -648,7 +645,6 @@ void D3DEngine::createMatrixBuffer(RECT rc)
         AlignCBuffer(sizeof(MatrixBuffer)),
         &m_matrixBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
@@ -672,6 +668,26 @@ void D3DEngine::createMatrixBuffer(RECT rc)
     m_device->CreateConstantBufferView(
         &cbvDesc,
         cbvHandle
+    );
+}
+
+void D3DEngine::createLightBuffer()
+{
+    DirectX::XMFLOAT3 direction{-1.0f, -1.0f, 1.0f};
+
+    createBuffer(
+        AlignCBuffer(sizeof(LightBuffer)),
+        &m_lightBuffer,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_RESOURCE_STATE_COMMON
+    );
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    createBuffer(
+        AlignCBuffer(sizeof(LightBuffer)),
+        &stagingBuffer,
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_STATE_GENERIC_READ
     );
 }
 
@@ -740,7 +756,7 @@ void D3DEngine::createPipelineState()
 
     D3D12_DESCRIPTOR_RANGE cbvRange = {
         .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-        .NumDescriptors = 1,
+        .NumDescriptors = 2,
         .BaseShaderRegister = 0,
         .RegisterSpace = 0,
         .OffsetInDescriptorsFromTableStart = 0
@@ -912,7 +928,7 @@ void D3DEngine::createDescriptorHeap()
 {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 2,
+        .NumDescriptors = 3,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         .NodeMask = 0
     };
@@ -991,7 +1007,6 @@ void D3DEngine::loadTexture(const std::wstring& path)
         AlignCBuffer(image->rowPitch) * image->height,
         &stagingResource,
         D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
@@ -1042,7 +1057,7 @@ void D3DEngine::loadTexture(const std::wstring& path)
     };
 
     D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    srvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     m_device->CreateShaderResourceView(
         m_texture.Get(),
@@ -1057,7 +1072,6 @@ void D3DEngine::createBuffer(
     UINT64 size,
     ID3D12Resource **buffer,
     D3D12_HEAP_TYPE heapType,
-    D3D12_TEXTURE_LAYOUT layout,
     D3D12_RESOURCE_STATES initialState
 )
 {
@@ -1078,7 +1092,7 @@ void D3DEngine::createBuffer(
         .MipLevels = 1,
         .Format = DXGI_FORMAT_UNKNOWN,
         .SampleDesc = {1, 0},
-        .Layout = layout,
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR, // Dimension = Buffer must be LAYOUT_ROW_MAJOR
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
     HRESULT hr = m_device->CreateCommittedResource(
