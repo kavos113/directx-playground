@@ -1,23 +1,23 @@
 cmake_minimum_required(VERSION 3.28)
-project(d3d_22_multi_path)
+project(d3d_22_lighting)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(d3d_22_multi_path
+add_executable(d3d_22_lighting
         main.cpp
         Application.cpp
         D3DEngine.cpp
         Debug.cpp
 )
-target_link_libraries(d3d_22_multi_path PRIVATE d3d12 dxgi d3dcompiler)
-target_compile_definitions(d3d_22_multi_path PRIVATE DEBUG)
-target_include_directories(d3d_22_multi_path PRIVATE ${THIRD_PARTY_DIR})
+target_link_libraries(d3d_22_lighting PRIVATE d3d12 dxgi d3dcompiler)
+target_compile_definitions(d3d_22_lighting PRIVATE DEBUG)
+target_include_directories(d3d_22_lighting PRIVATE ${THIRD_PARTY_DIR})
 
 find_package(directxmath CONFIG REQUIRED)
-target_link_libraries(d3d_22_multi_path PRIVATE Microsoft::DirectXMath)
+target_link_libraries(d3d_22_lighting PRIVATE Microsoft::DirectXMath)
 
 find_package(directxtex CONFIG REQUIRED)
-target_link_libraries(d3d_22_multi_path PRIVATE Microsoft::DirectXTex)
+target_link_libraries(d3d_22_lighting PRIVATE Microsoft::DirectXTex)
 
 file(COPY shader.hlsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${D3D_RESOURCES_DIR}/texture.png DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

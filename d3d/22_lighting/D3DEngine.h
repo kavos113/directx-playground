@@ -83,12 +83,11 @@ private:
         DirectX::XMMATRIX world;
         DirectX::XMMATRIX view;
         DirectX::XMMATRIX projection;
+    };
 
-        MatrixBuffer()
-            : world(DirectX::XMMatrixIdentity()),
-              view(DirectX::XMMatrixIdentity()),
-              projection(DirectX::XMMatrixIdentity())
-        {}
+    struct LightBuffer
+    {
+        DirectX::XMFLOAT3 direction;
     };
 
     void createDXGIFactory();
