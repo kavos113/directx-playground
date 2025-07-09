@@ -88,6 +88,8 @@ private:
     struct LightBuffer
     {
         DirectX::XMFLOAT3 direction;
+        float padding;
+        DirectX::XMFLOAT3 ambient;
     };
 
     void createDXGIFactory();

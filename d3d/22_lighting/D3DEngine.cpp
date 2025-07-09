@@ -418,7 +418,7 @@ void D3DEngine::createFence()
 
 void D3DEngine::beginFrame(UINT frameIndex)
 {
-    m_angle += 0.02f;
+    m_angle += 0.01f;
     DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
     m_matrixBufferData->world = world;
 
@@ -630,7 +630,7 @@ void D3DEngine::createMatrixBuffer(RECT rc)
 {
     DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
     DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
-        { 0.0f, 0.1f, -0.5f },
+        { 0.0f, 0.2f, -0.5f },
         { 0.0f, 0.0f, 0.0f },
         { 0.0f, 1.0f, 0.0f }
     );
@@ -673,7 +673,8 @@ void D3DEngine::createMatrixBuffer(RECT rc)
 
 void D3DEngine::createLightBuffer()
 {
-    DirectX::XMFLOAT3 direction{-1.0f, -1.0f, 1.0f};
+    DirectX::XMFLOAT3 direction{-1.0f, -3.0f, 1.0f};
+    DirectX::XMFLOAT3 ambient{0.3f, 0.3f, 0.3f};
 
     createBuffer(
         AlignCBuffer(sizeof(LightBuffer)),
@@ -688,6 +689,38 @@ void D3DEngine::createLightBuffer()
         &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_STATE_GENERIC_READ
+    );
+
+    LightBuffer *map = nullptr;
+    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&map));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map light buffer." << std::endl;
+        return;
+    }
+    map->direction = direction;
+    map->ambient = ambient;
+    stagingBuffer->Unmap(0, nullptr);
+
+    copyBuffer(stagingBuffer, m_lightBuffer);
+
+    m_waitForCopyResources.push_back(stagingBuffer);
+
+    barrier(
+        m_lightBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
+    cbvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
+        .BufferLocation = m_lightBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = AlignCBuffer(sizeof(LightBuffer))
+    };
+    m_device->CreateConstantBufferView(
+        &cbvDesc,
+        cbvHandle
     );
 }
 
@@ -754,19 +787,28 @@ void D3DEngine::createPipelineState()
     Microsoft::WRL::ComPtr<ID3D10Blob> signatureBlob;
     Microsoft::WRL::ComPtr<ID3D10Blob> errorBlob;
 
-    D3D12_DESCRIPTOR_RANGE cbvRange = {
+    D3D12_DESCRIPTOR_RANGE vsRange = {
         .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-        .NumDescriptors = 2,
+        .NumDescriptors = 1,
         .BaseShaderRegister = 0,
         .RegisterSpace = 0,
         .OffsetInDescriptorsFromTableStart = 0
     };
-    D3D12_DESCRIPTOR_RANGE srvRange = {
-        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-        .NumDescriptors = 1,
-        .BaseShaderRegister = 0,
-        .RegisterSpace = 0,
-        .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+    std::array psRanges = {
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 1,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = 0
+        },
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 0,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        }
     };
 
     std::array rootParameters = {
@@ -774,15 +816,15 @@ void D3DEngine::createPipelineState()
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
             .DescriptorTable = {
                 .NumDescriptorRanges = 1,
-                .pDescriptorRanges = &cbvRange
+                .pDescriptorRanges = &vsRange
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
         },
         D3D12_ROOT_PARAMETER{
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
             .DescriptorTable = {
-                .NumDescriptorRanges = 1,
-                .pDescriptorRanges = &srvRange
+                .NumDescriptorRanges = static_cast<UINT>(psRanges.size()),
+                .pDescriptorRanges = psRanges.data()
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
         }
@@ -862,7 +904,7 @@ void D3DEngine::createPipelineState()
         .SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
         .RasterizerState = {
             .FillMode = D3D12_FILL_MODE_SOLID,
-            .CullMode = D3D12_CULL_MODE_BACK,
+            .CullMode = D3D12_CULL_MODE_NONE,
             .FrontCounterClockwise = FALSE,
             .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
             .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
