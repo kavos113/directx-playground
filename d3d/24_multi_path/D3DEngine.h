@@ -92,6 +92,8 @@ private:
     D3D12_RECT m_scissorRect = {};
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_outlinePipelineState;
 };
 
 
