@@ -34,6 +34,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     createPipelineState();
     createViewport(hwnd);
 
+    createOffscreenBuffers();
+
     m_model->executeBarrier(m_commandList);
     executeCommand(0);
 }
@@ -303,7 +305,7 @@ void D3DEngine::createSwapChainResources()
 {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        .NumDescriptors = 2,
+        .NumDescriptors = FRAME_COUNT * 2,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
         .NodeMask = 0
     };
@@ -733,7 +735,7 @@ void D3DEngine::createDescriptorHeap()
 {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 3,
+        .NumDescriptors = 10,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         .NodeMask = 0
     };
@@ -842,5 +844,81 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
             &dsvDesc,
             dsvHandle
         );
+    }
+}
+
+void D3DEngine::createOffscreenBuffers()
+{
+    D3D12_RESOURCE_DESC desc = m_backBuffers[0]->GetDesc();
+
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+    D3D12_CLEAR_VALUE clearValue = {
+        .Format = desc.Format
+    };
+    for (UINT i = 0; i < m_clearColor.size(); ++i)
+    {
+        clearValue.Color[i] = m_clearColor[i];
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
+    rtvHandle.ptr += FRAME_COUNT * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
+    srvHandle.ptr += 3 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {
+        .Format = desc.Format,
+        .ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+        .Texture2D = { .MipSlice = 0 }
+    };
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
+        .Format = desc.Format,
+        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Texture2D = {
+            .MostDetailedMip = 0,
+            .MipLevels = 1,
+            .PlaneSlice = 0
+        }
+    };
+
+    for (UINT i = 0; i < FRAME_COUNT; ++i)
+    {
+        HRESULT hr = m_device->CreateCommittedResource(
+            &heapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            &clearValue,
+            IID_PPV_ARGS(&m_offscreenBuffers[i])
+        );
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to create offscreen buffer." << std::endl;
+            return;
+        }
+
+        m_device->CreateRenderTargetView(
+            m_offscreenBuffers[i].Get(),
+            &rtvDesc,
+            rtvHandle
+        );
+
+        m_device->CreateShaderResourceView(
+            m_offscreenBuffers[i].Get(),
+            &srvDesc,
+            srvHandle
+        );
+
+        rtvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
 }

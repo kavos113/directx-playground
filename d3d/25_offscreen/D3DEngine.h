@@ -18,6 +18,12 @@
 #include "Debug.h"
 #include "Model.h"
 
+/* Descriptor Heap Structure
+ * RTV: | back 0 | back 1 | offscreen 0 | offscreen 1 |
+ * DSV: | depth 0 | depth 1 |
+ * CBV/SRV: | matrix | light | texture | offscreen texture 0 | offscreen texture 1 |
+ */
+
 class D3DEngine
 {
 public:
@@ -49,6 +55,8 @@ private:
 
     void createPipelineState();
     void createViewport(HWND hwnd);
+
+    void createOffscreenBuffers();
 
     void barrier(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
@@ -92,6 +100,10 @@ private:
     D3D12_RECT m_scissorRect = {};
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_offscreenBuffers;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_postProcessPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_postProcessRootSignature;
 };
 
 
