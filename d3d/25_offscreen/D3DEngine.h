@@ -35,36 +35,6 @@ public:
     void render();
 
 private:
-    struct ScreenVertex
-    {
-        DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT2 uv;
-
-        static auto inputLayout()
-        {
-            return std::array{
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "POSITION",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = 0,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                },
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "TEXCOORD",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                }
-            };
-        }
-    };
-
     void createDXGIFactory();
     void getAdapter(IDXGIAdapter1 **adapter) const;
     void createDevice();
@@ -87,8 +57,6 @@ private:
     void createViewport(HWND hwnd);
 
     void createOffscreenBuffers();
-    void createOffscreenVertexBuffer();
-    void createOffscreenIndexBuffer();
     void createPostProcessPipelineState();
 
     void barrier(
@@ -137,31 +105,6 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_offscreenBuffers;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_postProcessPipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_postProcessRootSignature;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_offscreenVertexBuffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_offscreenIndexBuffer;
-
-    const std::array<ScreenVertex, 4> m_screenVertices = {
-        ScreenVertex{
-        {-1.0f, -1.0f, 0.0f},
-        {0.0f, 1.0f}
-        },
-        ScreenVertex{
-        {1.0f, -1.0f, 0.0f},
-         {1.0f, 1.0f}
-        },
-        ScreenVertex{
-        {-1.0f, 1.0f, 0.0f},
-        {0.0f, 0.0f}
-        },
-        ScreenVertex{
-        {1.0f, 1.0f, 0.0f},
-         {1.0f, 0.0f
-        }}
-    };
-    const std::array<UINT, 6> m_screenIndices = {
-        0, 1, 2,
-        1, 3, 2
-    };
 };
 
 

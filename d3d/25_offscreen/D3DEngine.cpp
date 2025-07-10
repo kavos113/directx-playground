@@ -35,8 +35,6 @@ D3DEngine::D3DEngine(HWND hwnd)
     createViewport(hwnd);
 
     createOffscreenBuffers();
-    createOffscreenVertexBuffer();
-    createOffscreenIndexBuffer();
     createPostProcessPipelineState();
 
     m_model->executeBarrier(m_commandList);
@@ -936,16 +934,6 @@ void D3DEngine::createOffscreenBuffers()
         rtvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
-}
-
-void D3DEngine::createOffscreenVertexBuffer()
-{
-
-}
-
-void D3DEngine::createOffscreenIndexBuffer()
-{
-
 }
 
 void D3DEngine::createPostProcessPipelineState()
