@@ -408,9 +408,13 @@ void D3DEngine::beginFrame(UINT frameIndex)
         },
     };
     m_commandList->ResourceBarrier(barriers.size(), barriers.data());
+}
 
+void D3DEngine::recordCommands(UINT frameIndex) const
+{
+    // offscreen rendering
     auto rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    rtvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    rtvHandle.ptr += (frameIndex + FRAME_COUNT) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     auto dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     dsvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
@@ -418,10 +422,6 @@ void D3DEngine::beginFrame(UINT frameIndex)
     m_commandList->ClearRenderTargetView(rtvHandle, m_clearColor.data(), 0, nullptr);
     m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-}
-
-void D3DEngine::recordCommands(UINT frameIndex) const
-{
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -438,6 +438,34 @@ void D3DEngine::recordCommands(UINT frameIndex) const
     m_commandList->SetPipelineState(m_pipelineState.Get());
 
     m_model->render(m_commandList);
+
+    // post-processing
+    barrier(
+        m_offscreenBuffers[frameIndex],
+        D3D12_RESOURCE_STATE_RENDER_TARGET,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+    );
+
+    rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
+    rtvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    m_commandList->ClearRenderTargetView(rtvHandle, m_clearColor.data(), 0, nullptr);
+
+    m_commandList->RSSetViewports(1, &m_viewport);
+    m_commandList->RSSetScissorRects(1, &m_scissorRect);
+
+    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    m_commandList->SetGraphicsRootSignature(m_postProcessRootSignature.Get());
+
+    gpuHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart();
+    gpuHandle.ptr += (frameIndex + 3) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+
+    m_commandList->SetPipelineState(m_postProcessPipelineState.Get());
+
+    m_model->renderScreen(m_commandList);
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -1015,7 +1043,7 @@ void D3DEngine::createPostProcessPipelineState()
         0,
         signatureBlob->GetBufferPointer(),
         signatureBlob->GetBufferSize(),
-        IID_PPV_ARGS(&m_rootSignature)
+        IID_PPV_ARGS(&m_postProcessRootSignature)
     );
     if (FAILED(hr))
     {
@@ -1025,7 +1053,7 @@ void D3DEngine::createPostProcessPipelineState()
 
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineDesc = {
-        .pRootSignature = m_rootSignature.Get(),
+        .pRootSignature = m_postProcessRootSignature.Get(),
         .VS = {
             .pShaderBytecode = vs->GetBufferPointer(),
             .BytecodeLength = vs->GetBufferSize()
@@ -1064,8 +1092,8 @@ void D3DEngine::createPostProcessPipelineState()
             .StencilEnable = FALSE,
         },
         .InputLayout = {
-            .pInputElementDescs = Model::Vertex::inputLayout().data(),
-            .NumElements = static_cast<UINT>(Model::Vertex::inputLayout().size())
+            .pInputElementDescs = Model::ScreenVertex::inputLayout().data(),
+            .NumElements = static_cast<UINT>(Model::ScreenVertex::inputLayout().size())
         },
         .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
         .NumRenderTargets = 1,
@@ -1076,7 +1104,7 @@ void D3DEngine::createPostProcessPipelineState()
     };
     hr = m_device->CreateGraphicsPipelineState(
         &graphicsPipelineDesc,
-        IID_PPV_ARGS(&m_pipelineState)
+        IID_PPV_ARGS(&m_postProcessPipelineState)
     );
     if (FAILED(hr))
     {
