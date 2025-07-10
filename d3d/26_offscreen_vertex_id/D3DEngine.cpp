@@ -455,7 +455,7 @@ void D3DEngine::recordCommands(UINT frameIndex) const
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
     m_commandList->SetGraphicsRootSignature(m_postProcessRootSignature.Get());
 
@@ -465,7 +465,8 @@ void D3DEngine::recordCommands(UINT frameIndex) const
 
     m_commandList->SetPipelineState(m_postProcessPipelineState.Get());
 
-    m_model->renderScreen(m_commandList);
+    // m_model->renderScreen(m_commandList);
+    m_commandList->DrawInstanced(4, 1, 0, 0);
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -1092,8 +1093,8 @@ void D3DEngine::createPostProcessPipelineState()
             .StencilEnable = FALSE,
         },
         .InputLayout = {
-            .pInputElementDescs = Model::ScreenVertex::inputLayout().data(),
-            .NumElements = static_cast<UINT>(Model::ScreenVertex::inputLayout().size())
+            .pInputElementDescs = nullptr,
+            .NumElements = 0
         },
         .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
         .NumRenderTargets = 1,

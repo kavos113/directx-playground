@@ -7,14 +7,20 @@ struct vs_output
     float2 uv : TEXCOORD;
 };
 
+/*
+ * 0 -> (-1,  1) uv: (0, 0)
+ * 1 -> ( 1,  1) uv: (1, 0)
+ * 2 -> (-1, -1) uv: (0, 1)
+ * 3 -> ( 1, -1) uv: (1, 1)
+ */
 vs_output vs_main(
-    float4 position : POSITION,
-    float2 texCoord : TEXCOORD
+    uint vertexId : SV_VertexID
 )
 {
     vs_output output;
-    output.position = position;
-    output.uv = texCoord;
+    output.uv = float2(vertexId & 1, vertexId >> 1);
+    output.position = float4(output.uv * 2.0 - 1.0, 0.0, 1.0);
+    output.position.y *= -1.0;
     return output;
 }
 
