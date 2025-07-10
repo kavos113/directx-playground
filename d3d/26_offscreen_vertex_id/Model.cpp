@@ -28,8 +28,6 @@ Model::Model(
 
     loadTexture(TEXTURE_PATH);
 
-    createOffscreenBuffers();
-
     executeCopy();
 }
 
@@ -62,15 +60,7 @@ void Model::render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &comm
     commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
 }
 
-void Model::renderScreen(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList) const
-{
-    commandList->IASetIndexBuffer(&m_offscreenIndexBufferView);
-    commandList->IASetVertexBuffers(0, 1, &m_offscreenVertexBufferView);
-
-    commandList->DrawIndexedInstanced(m_screenIndices.size(), 1, 0, 0, 0);
-}
-
-void Model::executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const
+void Model::executeBarrier(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& commandList) const
 {
     commandList->ResourceBarrier(
         m_barriers.size(),
@@ -512,91 +502,6 @@ void Model::loadTexture(const std::wstring &path)
         &srvDesc,
         srvHandle
     );
-}
-
-void Model::createOffscreenBuffers()
-{
-    createBuffer(
-        sizeof(ScreenVertex) * m_screenVertices.size(),
-        &m_offscreenVertexBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingVertexBuffer;
-    createBuffer(
-        sizeof(ScreenVertex) * m_screenVertices.size(),
-        &stagingVertexBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    ScreenVertex *vertexMap = nullptr;
-    HRESULT hr = stagingVertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map offscreen vertex buffer." << std::endl;
-        return;
-    }
-
-    std::ranges::copy(m_screenVertices, vertexMap);
-    stagingVertexBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingVertexBuffer, m_offscreenVertexBuffer);
-
-    m_offscreenVertexBufferView = {
-        .BufferLocation = m_offscreenVertexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(ScreenVertex) * m_screenVertices.size()),
-        .StrideInBytes = sizeof(ScreenVertex)
-    };
-
-    barrier(
-        m_offscreenVertexBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
-
-    m_waitForCopyResources.push_back(stagingVertexBuffer);
-
-    createBuffer(
-        sizeof(unsigned short) * m_screenIndices.size(),
-        &m_offscreenIndexBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingIndexBuffer;
-    createBuffer(
-        sizeof(unsigned short) * m_screenIndices.size(),
-        &stagingIndexBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    unsigned short *indexMap = nullptr;
-    hr = stagingIndexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map offscreen index buffer." << std::endl;
-        return;
-    }
-
-    std::ranges::copy(m_screenIndices, indexMap);
-    stagingIndexBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingIndexBuffer, m_offscreenIndexBuffer);
-
-    m_offscreenIndexBufferView = {
-        .BufferLocation = m_offscreenIndexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(unsigned short) * m_screenIndices.size()),
-        .Format = DXGI_FORMAT_R16_UINT
-    };
-
-    barrier(
-        m_offscreenIndexBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_INDEX_BUFFER
-    );
-
-    m_waitForCopyResources.push_back(stagingIndexBuffer);
 }
 
 // unsupported D3D12_HEAP_TYPE_CUSTOM

@@ -465,7 +465,6 @@ void D3DEngine::recordCommands(UINT frameIndex) const
 
     m_commandList->SetPipelineState(m_postProcessPipelineState.Get());
 
-    // m_model->renderScreen(m_commandList);
     m_commandList->DrawInstanced(4, 1, 0, 0);
 }
 

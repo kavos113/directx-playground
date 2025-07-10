@@ -20,10 +20,9 @@ public:
         RECT rc
     );
     void cleanup();
-    void executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const;
+    void executeBarrier(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& commandList) const;
 
     void render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList);
-    void renderScreen(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList) const;
 
     struct Vertex
     {
@@ -74,36 +73,6 @@ public:
         }
     };
 
-    struct ScreenVertex
-    {
-        DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT2 uv;
-
-        static auto inputLayout()
-        {
-            return std::array{
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "POSITION",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = 0,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                },
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "TEXCOORD",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                }
-            };
-        }
-    };
-
 private:
 
     struct MatrixBuffer
@@ -127,8 +96,6 @@ private:
     void createIndexBuffer();
     void createMatrixBuffer(RECT rc);
     void createLightBuffer();
-
-    void createOffscreenBuffers();
 
     void loadTexture(const std::wstring& path);
     void createBuffer(
@@ -181,34 +148,6 @@ private:
 
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_waitForCopyResources;
     std::vector<D3D12_RESOURCE_BARRIER> m_barriers;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_offscreenVertexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW m_offscreenVertexBufferView = {};
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_offscreenIndexBuffer;
-    D3D12_INDEX_BUFFER_VIEW m_offscreenIndexBufferView = {};
-
-    const std::array<ScreenVertex, 4> m_screenVertices = {
-        ScreenVertex{
-            {-1.0f, -1.0f, 0.0f},
-            {0.0f, 1.0f}
-        },
-        ScreenVertex{
-            {1.0f, -1.0f, 0.0f},
-             {1.0f, 1.0f}
-        },
-        ScreenVertex{
-            {-1.0f, 1.0f, 0.0f},
-            {0.0f, 0.0f}
-        },
-        ScreenVertex{
-            {1.0f, 1.0f, 0.0f},
-             {1.0f, 0.0f
-            }}
-    };
-    const std::array<UINT, 6> m_screenIndices = {
-        0, 1, 2,
-        1, 3, 2
-    };
 
     const std::string MODEL_PATH = "security_camera_01_2k.obj";
     const std::wstring TEXTURE_PATH = L"textures/security_camera_01_diff_2k.jpg";
