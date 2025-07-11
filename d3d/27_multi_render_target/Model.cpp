@@ -337,7 +337,7 @@ void Model::createMatrixBuffer(RECT rc)
 void Model::createLightBuffer()
 {
     DirectX::XMFLOAT3 direction{-1.0f, -3.0f, 1.0f};
-    DirectX::XMFLOAT3 ambient{0.3f, 0.3f, 0.3f};
+    DirectX::XMFLOAT3 color{0.0f, 1.0f, 0.0f};
 
     createBuffer(
         AlignCBuffer(sizeof(LightBuffer)),
@@ -362,7 +362,7 @@ void Model::createLightBuffer()
         return;
     }
     map->direction = direction;
-    map->ambient = ambient;
+    map->color = color;
     stagingBuffer->Unmap(0, nullptr);
 
     copyBuffer(stagingBuffer, m_lightBuffer);

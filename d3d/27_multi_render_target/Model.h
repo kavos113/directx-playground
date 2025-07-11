@@ -86,7 +86,7 @@ private:
     {
         DirectX::XMFLOAT3 direction;
         float padding;
-        DirectX::XMFLOAT3 ambient;
+        DirectX::XMFLOAT3 color;
     };
 
     void createCopyCommands();

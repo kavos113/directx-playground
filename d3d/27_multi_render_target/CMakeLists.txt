@@ -20,6 +20,6 @@ target_link_libraries(d3d_27_multi_render_target PRIVATE Microsoft::DirectXMath)
 find_package(directxtex CONFIG REQUIRED)
 target_link_libraries(d3d_27_multi_render_target PRIVATE Microsoft::DirectXTex)
 
-file(COPY shader.hlsl postprocess.hlsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY shader.hlsl lighting.hlsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${D3D_RESOURCES_DIR}/texture.png DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${D3D_RESOURCES_DIR}/models/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)

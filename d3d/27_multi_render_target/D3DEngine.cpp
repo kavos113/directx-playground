@@ -34,8 +34,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     createPipelineState();
     createViewport(hwnd);
 
-    createOffscreenBuffers();
-    createPostProcessPipelineState();
+    createGeometryBuffers();
+    createLightingPipelineState();
 
     m_model->executeBarrier(m_commandList);
     executeCommand(0);
@@ -306,7 +306,7 @@ void D3DEngine::createSwapChainResources()
 {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        .NumDescriptors = FRAME_COUNT * 2,
+        .NumDescriptors = FRAME_COUNT * 3,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
         .NodeMask = 0
     };
@@ -400,25 +400,44 @@ void D3DEngine::beginFrame(UINT frameIndex)
             .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
             .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
             .Transition = {
-                .pResource = m_offscreenBuffers[frameIndex].Get(),
+                .pResource = m_albedoBuffers[frameIndex].Get(),
                 .Subresource = 0,
                 .StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                 .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
             }
         },
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_normalBuffers[frameIndex].Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+            }
+        }
     };
     m_commandList->ResourceBarrier(barriers.size(), barriers.data());
 }
 
 void D3DEngine::recordCommands(UINT frameIndex) const
 {
-    // offscreen rendering
+    // gbuffer
     auto rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    rtvHandle.ptr += (frameIndex + FRAME_COUNT) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    rtvHandle.ptr += (frameIndex * 2 + FRAME_COUNT) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    auto normalHandle = rtvHandle;
+    normalHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     auto dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     dsvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
-    m_commandList->OMSetRenderTargets(1, &rtvHandle, TRUE, &dsvHandle);
+    std::array rtvHandles = { rtvHandle, normalHandle };
+
+    m_commandList->OMSetRenderTargets(
+        rtvHandles.size(),
+        rtvHandles.data(),
+        TRUE,
+        &dsvHandle
+    );
     m_commandList->ClearRenderTargetView(rtvHandle, m_clearColor.data(), 0, nullptr);
     m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
@@ -432,19 +451,37 @@ void D3DEngine::recordCommands(UINT frameIndex) const
 
     auto gpuHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart();
     m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
-    gpuHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    gpuHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
 
     m_commandList->SetPipelineState(m_pipelineState.Get());
 
     m_model->render(m_commandList);
 
-    // post-processing
-    barrier(
-        m_offscreenBuffers[frameIndex],
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-    );
+    // lighting
+    std::array barriers = {
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_albedoBuffers[frameIndex].Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+                .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            }
+        },
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_normalBuffers[frameIndex].Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+                .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            }
+        }
+    };
+    m_commandList->ResourceBarrier(barriers.size(), barriers.data());
 
     rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
     rtvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -457,13 +494,15 @@ void D3DEngine::recordCommands(UINT frameIndex) const
 
     m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
-    m_commandList->SetGraphicsRootSignature(m_postProcessRootSignature.Get());
+    m_commandList->SetGraphicsRootSignature(m_lightingRootSignature.Get());
 
     gpuHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart();
-    gpuHandle.ptr += (frameIndex + 3) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    gpuHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+    gpuHandle.ptr += (frameIndex * FRAME_COUNT + 2) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
 
-    m_commandList->SetPipelineState(m_postProcessPipelineState.Get());
+    m_commandList->SetPipelineState(m_lightingPipelineState.Get());
 
     m_commandList->DrawInstanced(4, 1, 0, 0);
 }
@@ -602,13 +641,6 @@ void D3DEngine::createPipelineState()
     };
     std::array psRanges = {
         D3D12_DESCRIPTOR_RANGE{
-            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-            .NumDescriptors = 1,
-            .BaseShaderRegister = 1,
-            .RegisterSpace = 0,
-            .OffsetInDescriptorsFromTableStart = 0
-        },
-        D3D12_DESCRIPTOR_RANGE{
             .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
             .NumDescriptors = 1,
             .BaseShaderRegister = 0,
@@ -732,8 +764,11 @@ void D3DEngine::createPipelineState()
             .NumElements = static_cast<UINT>(Model::Vertex::inputLayout().size())
         },
         .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-        .NumRenderTargets = 1,
-        .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .NumRenderTargets = 2,
+        .RTVFormats = {
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            DXGI_FORMAT_R16G16B16A16_FLOAT
+        },
         .DSVFormat = DXGI_FORMAT_D32_FLOAT,
         .SampleDesc = { 1, 0 },
         .NodeMask = 0,
@@ -888,7 +923,7 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
     }
 }
 
-void D3DEngine::createOffscreenBuffers()
+void D3DEngine::createGeometryBuffers()
 {
     D3D12_RESOURCE_DESC desc = m_backBuffers[0]->GetDesc();
 
@@ -933,13 +968,16 @@ void D3DEngine::createOffscreenBuffers()
 
     for (UINT i = 0; i < FRAME_COUNT; ++i)
     {
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        clearValue.Format = desc.Format;
+
         HRESULT hr = m_device->CreateCommittedResource(
             &heapProperties,
             D3D12_HEAP_FLAG_NONE,
             &desc,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             &clearValue,
-            IID_PPV_ARGS(&m_offscreenBuffers[i])
+            IID_PPV_ARGS(&m_albedoBuffers[i])
         );
         if (FAILED(hr))
         {
@@ -947,14 +985,50 @@ void D3DEngine::createOffscreenBuffers()
             return;
         }
 
+        rtvDesc.Format = desc.Format;
         m_device->CreateRenderTargetView(
-            m_offscreenBuffers[i].Get(),
+            m_albedoBuffers[i].Get(),
             &rtvDesc,
             rtvHandle
         );
 
+        srvDesc.Format = desc.Format;
         m_device->CreateShaderResourceView(
-            m_offscreenBuffers[i].Get(),
+            m_albedoBuffers[i].Get(),
+            &srvDesc,
+            srvHandle
+        );
+
+        rtvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        clearValue.Format = desc.Format;
+
+        hr = m_device->CreateCommittedResource(
+            &heapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            &clearValue,
+            IID_PPV_ARGS(&m_normalBuffers[i])
+        );
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to create normal buffer." << std::endl;
+            return;
+        }
+
+        rtvDesc.Format = desc.Format;
+        m_device->CreateRenderTargetView(
+            m_normalBuffers[i].Get(),
+            &rtvDesc,
+            rtvHandle
+        );
+
+        srvDesc.Format = desc.Format;
+        m_device->CreateShaderResourceView(
+            m_normalBuffers[i].Get(),
             &srvDesc,
             srvHandle
         );
@@ -964,16 +1038,16 @@ void D3DEngine::createOffscreenBuffers()
     }
 }
 
-void D3DEngine::createPostProcessPipelineState()
+void D3DEngine::createLightingPipelineState()
 {
-    auto ps = compileShader(L"postprocess.hlsl", "ps_main", "ps_5_0");
+    auto ps = compileShader(L"lighting.hlsl", "ps_main", "ps_5_0");
     if (!ps)
     {
         std::cerr << "Failed to compile pixel shader." << std::endl;
         return;
     }
 
-    auto vs = compileShader(L"postprocess.hlsl", "vs_main", "vs_5_0");
+    auto vs = compileShader(L"lighting.hlsl", "vs_main", "vs_5_0");
     if (!vs)
     {
         std::cerr << "Failed to compile vertex shader." << std::endl;
@@ -985,6 +1059,15 @@ void D3DEngine::createPostProcessPipelineState()
 
     D3D12_DESCRIPTOR_RANGE range = {
         .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+        .NumDescriptors = 2,
+        .BaseShaderRegister = 0,
+        .RegisterSpace = 0,
+        .OffsetInDescriptorsFromTableStart = 0
+    };
+
+
+    D3D12_DESCRIPTOR_RANGE lightRange = {
+        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
         .NumDescriptors = 1,
         .BaseShaderRegister = 0,
         .RegisterSpace = 0,
@@ -1000,6 +1083,14 @@ void D3DEngine::createPostProcessPipelineState()
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
         },
+        D3D12_ROOT_PARAMETER{
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+            .DescriptorTable = {
+                .NumDescriptorRanges = 1,
+                .pDescriptorRanges = &lightRange
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+        }
     };
 
     D3D12_STATIC_SAMPLER_DESC samplerDesc = {
@@ -1043,7 +1134,7 @@ void D3DEngine::createPostProcessPipelineState()
         0,
         signatureBlob->GetBufferPointer(),
         signatureBlob->GetBufferSize(),
-        IID_PPV_ARGS(&m_postProcessRootSignature)
+        IID_PPV_ARGS(&m_lightingRootSignature)
     );
     if (FAILED(hr))
     {
@@ -1053,7 +1144,7 @@ void D3DEngine::createPostProcessPipelineState()
 
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineDesc = {
-        .pRootSignature = m_postProcessRootSignature.Get(),
+        .pRootSignature = m_lightingRootSignature.Get(),
         .VS = {
             .pShaderBytecode = vs->GetBufferPointer(),
             .BytecodeLength = vs->GetBufferSize()
@@ -1104,11 +1195,11 @@ void D3DEngine::createPostProcessPipelineState()
     };
     hr = m_device->CreateGraphicsPipelineState(
         &graphicsPipelineDesc,
-        IID_PPV_ARGS(&m_postProcessPipelineState)
+        IID_PPV_ARGS(&m_lightingPipelineState)
     );
     if (FAILED(hr))
     {
-        std::cerr << "Failed to create graphics pipeline state." << std::endl;
+        std::cerr << "Failed to create lighting graphics pipeline state." << std::endl;
         return;
     }
 }

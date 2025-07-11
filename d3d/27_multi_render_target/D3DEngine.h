@@ -19,9 +19,9 @@
 #include "Model.h"
 
 /* Descriptor Heap Structure
- * RTV: | back 0 | back 1 | offscreen 0 | offscreen 1 |
+ * RTV: | back 0 | back 1 | albedo 0 | normal 0 | albedo 1 | normal 1 |
  * DSV: | depth 0 | depth 1 |
- * CBV/SRV: | matrix | light | texture | offscreen texture 0 | offscreen texture 1 |
+ * CBV/SRV: | matrix | light | texture | albedo 0 | normal 0 | albedo 1 | normal 1 |
  */
 
 class D3DEngine
@@ -56,8 +56,8 @@ private:
     void createPipelineState();
     void createViewport(HWND hwnd);
 
-    void createOffscreenBuffers();
-    void createPostProcessPipelineState();
+    void createGeometryBuffers();
+    void createLightingPipelineState();
 
     void barrier(
         const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
@@ -102,9 +102,10 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
 
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_offscreenBuffers;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_postProcessPipelineState;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_postProcessRootSignature;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_albedoBuffers;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_normalBuffers;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_lightingPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_lightingRootSignature;
 };
 
 
