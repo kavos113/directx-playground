@@ -1,5 +1,12 @@
-Texture2D<float4> tex : register(t0);
+Texture2D<float4> albedoTex : register(t0);
+Texture2D<float4> normalTex : register(t1);
 SamplerState samplerState : register(s0);
+
+cbuffer LightBuffer : register(b0)
+{
+    float4 lightDirection; 
+    float4 lightColor;
+};
 
 struct vs_output
 {
@@ -26,10 +33,12 @@ vs_output vs_main(
 
 float4 ps_main(vs_output input) : SV_TARGET
 {
-    // Sample the texture
-    float4 color = tex.Sample(samplerState, input.uv);
+    float4 albedo = albedoTex.Sample(samplerState, input.uv);
+    float4 texNormal = normalTex.Sample(samplerState, input.uv);
+    float3 normal = normalize(texNormal.xyz * 2.0 - 1.0); 
 
-    // Apply a simple post-processing effect (e.g., grayscale)
-    float gray = dot(color.rgb, float3(0.299, 0.587, 0.114));
-    return float4(gray, gray, gray, color.a);
+    float diffuse = saturate(dot(normal, -lightDirection.xyz));
+    
+    float3 color = albedo.rgb * lightColor.rgb * diffuse; 
+    return float4(color, 1.0);
 }

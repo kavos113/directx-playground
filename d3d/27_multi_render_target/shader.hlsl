@@ -8,17 +8,17 @@ cbuffer MatrixBuffer : register(b0)
     matrix projection;
 };
 
-cbuffer LightBuffer : register(b1)
-{
-    float4 lightDirection;
-    float4 ambientColor;
-};
-
 struct vs_output
 {
     float4 position : SV_POSITION;
     float4 normal : NORMAL;
     float2 uv : TEXCOORD;
+};
+
+struct ps_output
+{
+    float4 albedo : SV_TARGET0;
+    float4 normal : SV_TARGET1;
 };
 
 vs_output vs_main(
@@ -34,17 +34,12 @@ vs_output vs_main(
     return output;
 }
 
-float4 ps_main(vs_output input) : SV_TARGET
+ps_output ps_main(vs_output input)
 {
-    float4 color = tex.Sample(samplerState, input.uv);
+    ps_output output;
+    output.albedo = tex.Sample(samplerState, input.uv);
 
-    float4 ambient = ambientColor * color;
-
-    float3 light = normalize(lightDirection.xyz);
-    float3 normal = normalize(input.normal.xyz);
-    float intensity = max(0, dot(normal, -light));
-
-    float4 diffuse = color * intensity;
-
-    return ambient + diffuse;
+    float3 normalizedNormal = normalize(input.normal.xyz);
+    output.normal = float4(normalizedNormal * 0.5 + 0.5, 1.0);
+    return output;
 }
