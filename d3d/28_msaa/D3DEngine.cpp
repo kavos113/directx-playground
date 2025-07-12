@@ -350,13 +350,20 @@ void D3DEngine::createSwapChainResources()
         };
         D3D12_RESOURCE_DESC resourceDesc = m_backBuffers[i]->GetDesc();
         resourceDesc.SampleDesc = m_msaaDesc;
+        D3D12_CLEAR_VALUE clearValue = {
+            .Format = resourceDesc.Format,
+        };
+        for (UINT j = 0; j < 4; ++j)
+        {
+            clearValue.Color[j] = m_clearColor[j];
+        }
 
         hr = m_device->CreateCommittedResource(
             &heapProperties,
             D3D12_HEAP_FLAG_NONE,
             &resourceDesc,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            nullptr,
+            D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
+            &clearValue,
             IID_PPV_ARGS(&m_msaaBuffers[i])
         );
         if (FAILED(hr))
@@ -898,7 +905,7 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
 
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {
             .Format = DXGI_FORMAT_D32_FLOAT,
-            .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+            .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS,
             .Flags = D3D12_DSV_FLAG_NONE
         };
         auto dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
