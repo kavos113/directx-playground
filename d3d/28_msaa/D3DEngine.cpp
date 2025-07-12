@@ -305,7 +305,7 @@ void D3DEngine::createSwapChainResources()
 
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        .NumDescriptors = 2,
+        .NumDescriptors = 4,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
         .NodeMask = 0
     };
@@ -417,20 +417,32 @@ void D3DEngine::beginFrame(UINT frameIndex)
         return;
     }
 
-    D3D12_RESOURCE_BARRIER barrier = {
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-        .Transition = {
-            .pResource = m_backBuffers[frameIndex].Get(),
-            .Subresource = 0,
-            .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
-            .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+    std::array barriers = {
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_backBuffers[frameIndex].Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
+                .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST,
+            }
+        },
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_msaaBuffers[frameIndex].Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
+                .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET,
+            }
         }
     };
-    m_commandList->ResourceBarrier(1, &barrier);
+    m_commandList->ResourceBarrier(barriers.size(), barriers.data());
 
     auto rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    rtvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    rtvHandle.ptr += (2 + frameIndex) * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     auto dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     dsvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
@@ -458,6 +470,25 @@ void D3DEngine::recordCommands(UINT frameIndex) const
     m_commandList->SetPipelineState(m_pipelineState.Get());
 
     m_model->render(m_commandList);
+
+    D3D12_RESOURCE_BARRIER barrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition = {
+            .pResource = m_msaaBuffers[frameIndex].Get(),
+            .Subresource = 0,
+            .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+            .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_SOURCE
+        }
+    };
+    m_commandList->ResourceBarrier(1, &barrier);
+    m_commandList->ResolveSubresource(
+        m_backBuffers[frameIndex].Get(),
+        0,
+        m_msaaBuffers[frameIndex].Get(),
+        0,
+        DXGI_FORMAT_R8G8B8A8_UNORM
+    );
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -468,7 +499,7 @@ void D3DEngine::endFrame(UINT frameIndex)
         .Transition = {
             .pResource = m_backBuffers[frameIndex].Get(),
             .Subresource = 0,
-            .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+            .StateBefore = D3D12_RESOURCE_STATE_RESOLVE_DEST,
             .StateAfter = D3D12_RESOURCE_STATE_PRESENT
         }
     };
