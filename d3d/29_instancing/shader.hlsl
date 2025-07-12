@@ -3,7 +3,6 @@ SamplerState samplerState : register(s0);
 
 cbuffer MatrixBuffer : register(b0)
 {
-    matrix worldMat;
     matrix view;
     matrix projection;
 };

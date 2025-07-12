@@ -114,7 +114,6 @@ private:
 
     struct MatrixBuffer
     {
-        DirectX::XMMATRIX world;
         DirectX::XMMATRIX view;
         DirectX::XMMATRIX projection;
     };
@@ -184,7 +183,6 @@ private:
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView = {};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
 
-    float m_angle = 0.0f;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_matrixBuffer;
     MatrixBuffer *m_matrixBufferData = nullptr;
 

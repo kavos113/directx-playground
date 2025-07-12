@@ -52,10 +52,6 @@ void Model::cleanup()
 
 void Model::render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList)
 {
-    m_angle += 0.01f;
-    DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
-    m_matrixBufferData->world = world;
-
     std::array vertexBuffers = { m_vertexBufferView, m_instanceBufferView };
 
     commandList->IASetIndexBuffer(&m_indexBufferView);
@@ -295,7 +291,6 @@ void Model::createIndexBuffer()
 
 void Model::createMatrixBuffer(RECT rc)
 {
-    DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
     DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
         { 0.0f, 5.0f, -5.0f },
         { 0.0f, 0.0f, 0.0f },
@@ -322,7 +317,6 @@ void Model::createMatrixBuffer(RECT rc)
         return;
     }
 
-    m_matrixBufferData->world = world;
     m_matrixBufferData->view = view;
     m_matrixBufferData->projection = projection;
 
