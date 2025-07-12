@@ -301,6 +301,8 @@ void D3DEngine::createSwapChain(HWND hwnd)
 
 void D3DEngine::createSwapChainResources()
 {
+    checkMSAA();
+
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
         .NumDescriptors = 2,
@@ -338,6 +340,39 @@ void D3DEngine::createSwapChainResources()
         rtvHandle.ptr += i * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
         m_device->CreateRenderTargetView(m_backBuffers[i].Get(), nullptr, rtvHandle);
+
+        D3D12_HEAP_PROPERTIES heapProperties = {
+            .Type = D3D12_HEAP_TYPE_DEFAULT,
+            .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+            .CreationNodeMask = 0,
+            .VisibleNodeMask = 0
+        };
+        D3D12_RESOURCE_DESC resourceDesc = m_backBuffers[i]->GetDesc();
+        resourceDesc.SampleDesc = m_msaaDesc;
+
+        hr = m_device->CreateCommittedResource(
+            &heapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &resourceDesc,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            nullptr,
+            IID_PPV_ARGS(&m_msaaBuffers[i])
+        );
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to create MSAA buffer." << std::endl;
+            return;
+        }
+
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {
+            .Format = resourceDesc.Format,
+            .ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS,
+            .Texture2DMS = {}
+        };
+        rtvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+        m_device->CreateRenderTargetView(m_msaaBuffers[i].Get(), &rtvDesc, rtvHandle);
     }
 }
 
@@ -692,7 +727,7 @@ void D3DEngine::createPipelineState()
         .NumRenderTargets = 1,
         .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
         .DSVFormat = DXGI_FORMAT_D32_FLOAT,
-        .SampleDesc = { 1, 0 },
+        .SampleDesc = m_msaaDesc,
         .NodeMask = 0,
         .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
     };
@@ -801,7 +836,7 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
         .DepthOrArraySize = 1,
         .MipLevels = 1,
         .Format = DXGI_FORMAT_D32_FLOAT,
-        .SampleDesc = {1, 0},
+        .SampleDesc = m_msaaDesc,
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
     };
@@ -843,4 +878,27 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
             dsvHandle
         );
     }
+}
+
+void D3DEngine::checkMSAA()
+{
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msaaQualityLevels = {
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .SampleCount = 4,
+        .Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE
+    };
+
+    HRESULT hr = m_device->CheckFeatureSupport(
+        D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+        &msaaQualityLevels,
+        sizeof(msaaQualityLevels)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to check MSAA quality levels." << std::endl;
+        return;
+    }
+
+    m_msaaDesc.Count = 4;
+    m_msaaDesc.Quality = msaaQualityLevels.NumQualityLevels > 0 ? msaaQualityLevels.NumQualityLevels - 1 : 0;
 }

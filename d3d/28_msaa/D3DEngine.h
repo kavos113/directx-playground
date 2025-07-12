@@ -18,6 +18,12 @@
 #include "Debug.h"
 #include "Model.h"
 
+/* Descriptor Heap Structure
+ * RTV: | back 0 | back 1 | msaa 0 | msaa 1 |
+ * DSV: | depth 0 | depth 1 |
+ * CBV/SRV: | matrix | light | texture |
+ */
+
 class D3DEngine
 {
 public:
@@ -63,6 +69,8 @@ private:
     void waitForFence(const Microsoft::WRL::ComPtr<ID3D12CommandQueue>& queue, UINT frameIndex);
     void executeCommand(UINT frameIndex);
 
+    void checkMSAA();
+
     std::unique_ptr<Debug> m_debug;
     std::unique_ptr<Model> m_model;
 
@@ -92,6 +100,9 @@ private:
     D3D12_RECT m_scissorRect = {};
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_msaaBuffers;
+    DXGI_SAMPLE_DESC m_msaaDesc{};
 };
 
 
