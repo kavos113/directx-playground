@@ -59,6 +59,43 @@ public:
                     .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
                     .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
                     .InstanceDataStepRate = 0
+                },
+
+                D3D12_INPUT_ELEMENT_DESC{
+                    .SemanticName = "WORLD",
+                    .SemanticIndex = 0,
+                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+                    .InputSlot = 1,
+                    .AlignedByteOffset = 0,
+                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    .InstanceDataStepRate = 1
+                },
+                D3D12_INPUT_ELEMENT_DESC{
+                    .SemanticName = "WORLD",
+                    .SemanticIndex = 1,
+                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+                    .InputSlot = 1,
+                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
+                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    .InstanceDataStepRate = 1
+                },
+                D3D12_INPUT_ELEMENT_DESC{
+                    .SemanticName = "WORLD",
+                    .SemanticIndex = 2,
+                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+                    .InputSlot = 1,
+                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
+                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    .InstanceDataStepRate = 1
+                },
+                D3D12_INPUT_ELEMENT_DESC{
+                    .SemanticName = "WORLD",
+                    .SemanticIndex = 3,
+                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+                    .InputSlot = 1,
+                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
+                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    .InstanceDataStepRate = 1
                 }
             };
         }
@@ -89,6 +126,11 @@ private:
         DirectX::XMFLOAT3 ambient;
     };
 
+    struct InstanceData
+    {
+        DirectX::XMFLOAT4X4 world;
+    };
+
     void createCopyCommands();
 
     void loadModel(const std::string &path);
@@ -96,6 +138,8 @@ private:
     void createIndexBuffer();
     void createMatrixBuffer(RECT rc);
     void createLightBuffer();
+
+    void createInstanceBuffer();
 
     void loadTexture(const std::wstring& path);
     void createBuffer(
@@ -119,6 +163,8 @@ private:
         D3D12_RESOURCE_STATES beforeState,
         D3D12_RESOURCE_STATES afterState
     );
+
+    static constexpr int NUM_INSTANCES = 100;
 
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
@@ -148,6 +194,10 @@ private:
 
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_waitForCopyResources;
     std::vector<D3D12_RESOURCE_BARRIER> m_barriers;
+
+    std::array<InstanceData, NUM_INSTANCES> m_instanceData{};
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceBuffer;
+    D3D12_VERTEX_BUFFER_VIEW m_instanceBufferView = {};
 
     const std::string MODEL_PATH = "security_camera_01_2k.obj";
     const std::wstring TEXTURE_PATH = L"textures/security_camera_01_diff_2k.jpg";

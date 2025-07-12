@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <map>
+#include <random>
 
 #define AlignCBuffer(x) (((x) + 0xff) & ~0xff)
 
@@ -22,6 +23,7 @@ Model::Model(
     loadModel(MODEL_PATH);
     createVertexBuffer();
     createIndexBuffer();
+    createInstanceBuffer();
 
     createMatrixBuffer(rc);
     createLightBuffer();
@@ -54,10 +56,12 @@ void Model::render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &comm
     DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
     m_matrixBufferData->world = world;
 
-    commandList->IASetIndexBuffer(&m_indexBufferView);
-    commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    std::array vertexBuffers = { m_vertexBufferView, m_instanceBufferView };
 
-    commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
+    commandList->IASetIndexBuffer(&m_indexBufferView);
+    commandList->IASetVertexBuffers(0, vertexBuffers.size(), vertexBuffers.data());
+
+    commandList->DrawIndexedInstanced(m_indices.size(), NUM_INSTANCES, 0, 0, 0);
 }
 
 void Model::executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const
@@ -293,7 +297,7 @@ void Model::createMatrixBuffer(RECT rc)
 {
     DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
     DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
-        { 0.0f, 0.2f, -0.5f },
+        { 0.0f, 5.0f, -5.0f },
         { 0.0f, 0.0f, 0.0f },
         { 0.0f, 1.0f, 0.0f }
     );
@@ -385,6 +389,63 @@ void Model::createLightBuffer()
         &cbvDesc,
         cbvHandle
     );
+}
+
+void Model::createInstanceBuffer()
+{
+    std::mt19937 mt(std::random_device{}());
+    std::uniform_real_distribution dist(-3.0f, 3.0f);
+
+    for (int i = 0; i < NUM_INSTANCES; ++i)
+    {
+        float x = dist(mt);
+        float y = dist(mt);
+        float z = dist(mt);
+
+        DirectX::XMMATRIX instanceMatrix = DirectX::XMMatrixTranslation(x, y, z);
+        DirectX::XMStoreFloat4x4(&m_instanceData[i].world, instanceMatrix);
+    }
+
+    createBuffer(
+        sizeof(InstanceData) * NUM_INSTANCES,
+        &m_instanceBuffer,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_RESOURCE_STATE_COMMON
+    );
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    createBuffer(
+        sizeof(InstanceData) * NUM_INSTANCES,
+        &stagingBuffer,
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_STATE_GENERIC_READ
+    );
+
+    InstanceData *instanceMap = nullptr;
+    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&instanceMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map instance buffer." << std::endl;
+        return;
+    }
+    std::ranges::copy(m_instanceData, instanceMap);
+    stagingBuffer->Unmap(0, nullptr);
+
+    copyBuffer(stagingBuffer, m_instanceBuffer);
+
+    m_instanceBufferView = {
+        .BufferLocation = m_instanceBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = static_cast<UINT>(sizeof(InstanceData) * NUM_INSTANCES),
+        .StrideInBytes = sizeof(InstanceData)
+    };
+
+    barrier(
+        m_instanceBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+    m_waitForCopyResources.push_back(stagingBuffer);
 }
 
 void Model::loadTexture(const std::wstring &path)

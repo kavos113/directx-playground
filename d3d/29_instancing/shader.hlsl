@@ -3,7 +3,7 @@ SamplerState samplerState : register(s0);
 
 cbuffer MatrixBuffer : register(b0)
 {
-    matrix world;
+    matrix worldMat;
     matrix view;
     matrix projection;
 };
@@ -24,7 +24,8 @@ struct vs_output
 vs_output vs_main(
     float4 position : POSITION,
     float4 normal : NORMAL,
-    float2 texCoord : TEXCOORD
+    float2 texCoord : TEXCOORD,
+    float4x4 world : WORLD
 )
 {
     vs_output output;
