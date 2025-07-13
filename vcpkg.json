@@ -14,5 +14,8 @@
   }, {
     "name" : "directxtex",
     "version>=" : "2025-03-24"
+  }, {
+    "name" : "d3d12-memory-allocator",
+    "version>=" : "3.0.1"
   } ]
 }
