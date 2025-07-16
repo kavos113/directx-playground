@@ -20,6 +20,9 @@ target_link_libraries(d3d_30_d3d12ma PRIVATE Microsoft::DirectXMath)
 find_package(directxtex CONFIG REQUIRED)
 target_link_libraries(d3d_30_d3d12ma PRIVATE Microsoft::DirectXTex)
 
+find_package(D3D12MemoryAllocator CONFIG REQUIRED)
+target_link_libraries(d3d_30_d3d12ma PRIVATE GPUOpen::D3D12MemoryAllocator)
+
 file(COPY shader.hlsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${D3D_RESOURCES_DIR}/texture.png DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${D3D_RESOURCES_DIR}/models/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)

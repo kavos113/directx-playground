@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <array>
+#include <D3D12MemAlloc.h>
 #include <string>
 
 
@@ -17,6 +18,7 @@ public:
     Model(
         Microsoft::WRL::ComPtr<ID3D12Device> device,
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator,
         RECT rc
     );
     void cleanup();
@@ -100,28 +102,29 @@ private:
     void loadTexture(const std::wstring& path);
     void createBuffer(
         UINT64 size,
-        ID3D12Resource **buffer,
+        D3D12MA::Allocation **buffer,
         D3D12_HEAP_TYPE heapType,
         D3D12_RESOURCE_STATES initialState
     );
     void copyTexture(
-        const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
-        const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
+        const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &srcBuffer,
+        const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &dstBuffer
     ) const;
     void copyBuffer(
-        const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
-        const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
+        const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &srcBuffer,
+        const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &dstBuffer
     ) const;
     void executeCopy();
 
     void barrier(
-        const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
+        const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &resource,
         D3D12_RESOURCE_STATES beforeState,
         D3D12_RESOURCE_STATES afterState
     );
 
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_allocator;
 
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_copyCommandAllocator;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyCommandQueue;
@@ -134,19 +137,19 @@ private:
     std::vector<unsigned short> m_indices;
 
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_vertexBuffer;
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView = {};
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_indexBuffer;
 
     float m_angle = 0.0f;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_matrixBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_matrixBuffer;
     MatrixBuffer *m_matrixBufferData = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_lightBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_lightBuffer;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_texture;
 
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_waitForCopyResources;
+    std::vector<Microsoft::WRL::ComPtr<D3D12MA::Allocation>> m_waitForCopyResources;
     std::vector<D3D12_RESOURCE_BARRIER> m_barriers;
 
     const std::string MODEL_PATH = "security_camera_01_2k.obj";

@@ -28,6 +28,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     m_model = std::make_unique<Model>(
         m_device,
         m_descHeap,
+        m_allocator,
         rc
     );
 
@@ -208,6 +209,17 @@ void D3DEngine::createDevice()
         );
         if (SUCCEEDED(hr))
         {
+            D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
+            allocatorDesc.Flags = D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS;
+            allocatorDesc.pDevice = m_device.Get();
+            allocatorDesc.pAdapter = adapter.Get();
+            HRESULT hr = D3D12MA::CreateAllocator(&allocatorDesc, &m_allocator);
+            if (FAILED(hr))
+            {
+                std::cerr << "Failed to create D3D12MA allocator." << std::endl;
+                return;
+            }
+
             return;
         }
     }
@@ -785,13 +797,8 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
         return;
     }
 
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_DEFAULT,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
@@ -816,13 +823,14 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
 
     for (UINT i = 0; i < FRAME_COUNT; ++i)
     {
-        hr = m_device->CreateCommittedResource(
-            &heapProperties,
-            D3D12_HEAP_FLAG_NONE,
+        hr = m_allocator->CreateResource(
+            &allocDesc,
             &resourceDesc,
             D3D12_RESOURCE_STATE_DEPTH_WRITE,
             &clearValue,
-            IID_PPV_ARGS(&m_depthBuffers[i])
+            &m_depthBuffers[i],
+            IID_NULL,
+            nullptr
         );
         if (FAILED(hr))
         {
@@ -838,7 +846,7 @@ void D3DEngine::createDepthResources(UINT width, UINT height)
         auto dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
         dsvHandle.ptr += i * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
         m_device->CreateDepthStencilView(
-            m_depthBuffers[i].Get(),
+            m_depthBuffers[i]->GetResource(),
             &dsvDesc,
             dsvHandle
         );

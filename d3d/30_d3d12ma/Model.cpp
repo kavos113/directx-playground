@@ -13,9 +13,11 @@
 Model::Model(
     Microsoft::WRL::ComPtr<ID3D12Device> device,
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator,
     RECT rc
 ) : m_device(std::move(device)),
-    m_descHeap(std::move(descHeap))
+    m_descHeap(std::move(descHeap)),
+    m_allocator(std::move(allocator))
 {
     createCopyCommands();
 
@@ -210,7 +212,7 @@ void Model::createVertexBuffer()
         D3D12_RESOURCE_STATE_COMMON
     );
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> stagingBuffer;
     createBuffer(
         sizeof(Vertex) * m_vertices.size(),
         &stagingBuffer,
@@ -219,19 +221,23 @@ void Model::createVertexBuffer()
     );
 
     Vertex *vertexMap = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
+    HRESULT hr = stagingBuffer->GetResource()->Map(
+        0,
+        nullptr,
+        reinterpret_cast<void**>(&vertexMap)
+    );
     if (FAILED(hr))
     {
         std::cerr << "Failed to map vertex buffer." << std::endl;
         return;
     }
     std::ranges::copy(m_vertices, vertexMap);
-    stagingBuffer->Unmap(0, nullptr);
+    stagingBuffer->GetResource()->Unmap(0, nullptr);
 
     copyBuffer(stagingBuffer, m_vertexBuffer);
 
     m_vertexBufferView = {
-        .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
+        .BufferLocation = m_vertexBuffer->GetResource()->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
         .StrideInBytes = sizeof(Vertex)
     };
@@ -254,7 +260,7 @@ void Model::createIndexBuffer()
         D3D12_RESOURCE_STATE_COMMON
     );
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> stagingBuffer;
     createBuffer(
         sizeof(unsigned short) * m_indices.size(),
         &stagingBuffer,
@@ -263,19 +269,23 @@ void Model::createIndexBuffer()
     );
 
     unsigned short *indexMap = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
+    HRESULT hr = stagingBuffer->GetResource()->Map(
+        0,
+        nullptr,
+        reinterpret_cast<void**>(&indexMap)
+    );
     if (FAILED(hr))
     {
         std::cerr << "Failed to map index buffer." << std::endl;
         return;
     }
     std::ranges::copy(m_indices, indexMap);
-    stagingBuffer->Unmap(0, nullptr);
+    stagingBuffer->GetResource()->Unmap(0, nullptr);
 
     copyBuffer(stagingBuffer, m_indexBuffer);
 
     m_indexBufferView = {
-        .BufferLocation = m_indexBuffer->GetGPUVirtualAddress(),
+        .BufferLocation = m_indexBuffer->GetResource()->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>(sizeof(unsigned short) * m_indices.size()),
         .Format = DXGI_FORMAT_R16_UINT
     };
@@ -311,7 +321,11 @@ void Model::createMatrixBuffer(RECT rc)
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
-    HRESULT hr = m_matrixBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_matrixBufferData));
+    HRESULT hr = m_matrixBuffer->GetResource()->Map(
+        0,
+        nullptr,
+        reinterpret_cast<void**>(&m_matrixBufferData)
+    );
     if (FAILED(hr))
     {
         std::cerr << "Failed to map matrix buffer." << std::endl;
@@ -324,7 +338,7 @@ void Model::createMatrixBuffer(RECT rc)
 
     D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_matrixBuffer->GetGPUVirtualAddress(),
+        .BufferLocation = m_matrixBuffer->GetResource()->GetGPUVirtualAddress(),
         .SizeInBytes = AlignCBuffer(sizeof(MatrixBuffer))
     };
 
@@ -346,7 +360,7 @@ void Model::createLightBuffer()
         D3D12_RESOURCE_STATE_COMMON
     );
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> stagingBuffer;
     createBuffer(
         AlignCBuffer(sizeof(LightBuffer)),
         &stagingBuffer,
@@ -355,7 +369,11 @@ void Model::createLightBuffer()
     );
 
     LightBuffer *map = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&map));
+    HRESULT hr = stagingBuffer->GetResource()->Map(
+        0,
+        nullptr,
+        reinterpret_cast<void**>(&map)
+    );
     if (FAILED(hr))
     {
         std::cerr << "Failed to map light buffer." << std::endl;
@@ -363,7 +381,7 @@ void Model::createLightBuffer()
     }
     map->direction = direction;
     map->ambient = ambient;
-    stagingBuffer->Unmap(0, nullptr);
+    stagingBuffer->GetResource()->Unmap(0, nullptr);
 
     copyBuffer(stagingBuffer, m_lightBuffer);
 
@@ -378,7 +396,7 @@ void Model::createLightBuffer()
     D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
     cbvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_lightBuffer->GetGPUVirtualAddress(),
+        .BufferLocation = m_lightBuffer->GetResource()->GetGPUVirtualAddress(),
         .SizeInBytes = AlignCBuffer(sizeof(LightBuffer))
     };
     m_device->CreateConstantBufferView(
@@ -413,13 +431,9 @@ void Model::loadTexture(const std::wstring &path)
 
     const DirectX::Image *image = scratchImage.GetImage(0, 0, 0);
 
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_DEFAULT,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Alignment = 0,
@@ -432,13 +446,14 @@ void Model::loadTexture(const std::wstring &path)
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
-    hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
+    hr = m_allocator->CreateResource(
+        &allocDesc,
         &resourceDesc,
         D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
-        IID_PPV_ARGS(&m_texture)
+        &m_texture,
+        IID_NULL,
+        nullptr
     );
     if (FAILED(hr))
     {
@@ -446,7 +461,7 @@ void Model::loadTexture(const std::wstring &path)
         return;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingResource;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> stagingResource;
     createBuffer(
         AlignCBuffer(image->rowPitch) * image->height,
         &stagingResource,
@@ -455,7 +470,11 @@ void Model::loadTexture(const std::wstring &path)
     );
 
     uint8_t *mappedData = nullptr;
-    hr = stagingResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedData));
+    hr = stagingResource->GetResource()->Map(
+        0,
+        nullptr,
+        reinterpret_cast<void**>(&mappedData)
+    );
     if (FAILED(hr))
     {
         std::cerr << "Failed to map staging resource for texture upload." << std::endl;
@@ -470,7 +489,7 @@ void Model::loadTexture(const std::wstring &path)
             image->rowPitch
         );
     }
-    stagingResource->Unmap(0, nullptr);
+    stagingResource->GetResource()->Unmap(0, nullptr);
 
     copyTexture(stagingResource, m_texture);
 
@@ -498,7 +517,7 @@ void Model::loadTexture(const std::wstring &path)
     srvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     m_device->CreateShaderResourceView(
-        m_texture.Get(),
+        m_texture->GetResource(),
         &srvDesc,
         srvHandle
     );
@@ -508,18 +527,13 @@ void Model::loadTexture(const std::wstring &path)
 // create simple buffer(not texture)
 void Model::createBuffer(
     UINT64 size,
-    ID3D12Resource **buffer,
+    D3D12MA::Allocation **buffer,
     D3D12_HEAP_TYPE heapType,
     D3D12_RESOURCE_STATES initialState
 )
 {
-    D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = heapType,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
-    };
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = heapType;
 
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -533,13 +547,14 @@ void Model::createBuffer(
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR, // Dimension = Buffer must be LAYOUT_ROW_MAJOR
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
-    HRESULT hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
+    HRESULT hr = m_allocator->CreateResource(
+        &allocDesc,
         &resourceDesc,
         initialState,
         nullptr,
-        IID_PPV_ARGS(buffer)
+        buffer,
+        IID_NULL,
+        nullptr
     );
     if (FAILED(hr))
     {
@@ -549,11 +564,11 @@ void Model::createBuffer(
 }
 
 void Model::copyTexture(
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
+    const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &srcBuffer,
+    const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &dstBuffer
 ) const
 {
-    D3D12_RESOURCE_DESC resourceDesc = dstBuffer->GetDesc();
+    D3D12_RESOURCE_DESC resourceDesc = dstBuffer->GetResource()->GetDesc();
 
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
     UINT64 requiredSize = 0;
@@ -569,13 +584,13 @@ void Model::copyTexture(
     );
 
     D3D12_TEXTURE_COPY_LOCATION srcLocation = {
-        .pResource = srcBuffer.Get(),
+        .pResource = srcBuffer->GetResource(),
         .Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
         .PlacedFootprint = layout
     };
 
     D3D12_TEXTURE_COPY_LOCATION dstLocation = {
-        .pResource = dstBuffer.Get(),
+        .pResource = dstBuffer->GetResource(),
         .Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
         .SubresourceIndex = 0
     };
@@ -589,13 +604,13 @@ void Model::copyTexture(
 }
 
 void Model::copyBuffer(
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &srcBuffer,
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &dstBuffer
+    const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &srcBuffer,
+    const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &dstBuffer
 ) const
 {
     m_copyCommandList->CopyResource(
-        dstBuffer.Get(),
-        srcBuffer.Get()
+        dstBuffer->GetResource(),
+        srcBuffer->GetResource()
     );
 }
 
@@ -648,7 +663,7 @@ void Model::executeCopy()
 }
 
 void Model::barrier(
-    const Microsoft::WRL::ComPtr<ID3D12Resource> &resource,
+    const Microsoft::WRL::ComPtr<D3D12MA::Allocation> &resource,
     D3D12_RESOURCE_STATES beforeState,
     D3D12_RESOURCE_STATES afterState
 )
@@ -658,7 +673,7 @@ void Model::barrier(
             .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
             .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
             .Transition = {
-                .pResource = resource.Get(),
+                .pResource = resource->GetResource(),
                 .Subresource = 0,
                 .StateBefore = beforeState,
                 .StateAfter = afterState

@@ -11,6 +11,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#include <D3D12MemAlloc.h>
 
 #include <array>
 #include <memory>
@@ -79,7 +80,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
     std::array<float, 4> m_clearColor = {1.0f, 1.0f, 1.0f, 1.0f};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_depthBuffers;
+    std::array<Microsoft::WRL::ComPtr<D3D12MA::Allocation>, FRAME_COUNT> m_depthBuffers;
 
     std::array<Microsoft::WRL::ComPtr<ID3D12Fence>, FRAME_COUNT> m_fence;
     std::array<UINT64, FRAME_COUNT> m_fenceValues = {};
@@ -92,6 +93,8 @@ private:
     D3D12_RECT m_scissorRect = {};
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
+
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_allocator;
 };
 
 
