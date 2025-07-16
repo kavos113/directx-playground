@@ -14,6 +14,7 @@ D3DEngine::D3DEngine()
     createDXGIFactory();
     createDevice();
     createCommandResources();
+    createFence();
     createDescriptorHeap();
     createResources();
     createPipeline();
@@ -24,6 +25,76 @@ D3DEngine::~D3DEngine() = default;
 void D3DEngine::run()
 {
     std::cout << "D3DEngine is running..." << std::endl;
+
+    m_commandList->SetPipelineState(m_pipelineState.Get());
+    m_commandList->SetComputeRootSignature(m_rootSignature.Get());
+
+    m_commandList->SetDescriptorHeaps(1, m_descriptorHeap.GetAddressOf());
+    m_commandList->SetComputeRootDescriptorTable(
+        0,
+        m_descriptorHeap->GetGPUDescriptorHandleForHeapStart()
+    );
+
+    m_commandList->Dispatch(1, 1, 1);
+
+    D3D12_RESOURCE_BARRIER barrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition = {
+            .pResource = m_buffer.Get(),
+            .Subresource = 0,
+            .StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE
+        }
+    };
+    m_commandList->ResourceBarrier(1, &barrier);
+
+    m_commandList->CopyResource(m_outputBuffer.Get(), m_buffer.Get());
+
+    HRESULT hr = m_commandList->Close();
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to close command list." << std::endl;
+        return;
+    }
+
+    ID3D12CommandList* commandLists[] = { m_commandList.Get() };
+    m_commandQueue->ExecuteCommandLists(1, commandLists);
+
+    m_fenceValue++;
+    hr = m_commandQueue->Signal(m_fence.Get(), m_fenceValue);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to signal command queue." << std::endl;
+        return;
+    }
+
+    if (m_fence->GetCompletedValue() < m_fenceValue)
+    {
+        hr = m_fence->SetEventOnCompletion(m_fenceValue, m_fenceEvent);
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to set event on fence completion." << std::endl;
+            return;
+        }
+        WaitForSingleObject(m_fenceEvent, INFINITE);
+    }
+
+    Data* outputData = nullptr;
+    hr = m_outputBuffer->Map(0, nullptr, reinterpret_cast<void**>(&outputData));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map output buffer." << std::endl;
+        return;
+    }
+
+    for (size_t i = 0; i < DATA_COUNT; ++i)
+    {
+        std::cout << "Output Data[" << i << "]: Value = " << outputData[i].value
+                  << ", ID = " << outputData[i].id << std::endl;
+    }
+
+    m_outputBuffer->Unmap(0, nullptr);
 }
 
 void D3DEngine::enableDebugLayer()
@@ -200,6 +271,28 @@ void D3DEngine::createCommandResources()
     }
 }
 
+void D3DEngine::createFence()
+{
+    m_fenceValue = 0;
+    m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!m_fenceEvent)
+    {
+        std::cerr << "Failed to create fence event." << std::endl;
+        return;
+    }
+
+    HRESULT hr = m_device->CreateFence(
+        m_fenceValue,
+        D3D12_FENCE_FLAG_NONE,
+        IID_PPV_ARGS(&m_fence)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create fence." << std::endl;
+        return;
+    }
+}
+
 void D3DEngine::createDescriptorHeap()
 {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
@@ -365,11 +458,11 @@ void D3DEngine::createPipeline()
     };
     D3D12_ROOT_PARAMETER parameter = {
         .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
         .DescriptorTable = {
             .NumDescriptorRanges = 1,
             .pDescriptorRanges = &range
-        }
+        },
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
     };
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {

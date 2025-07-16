@@ -30,6 +30,7 @@ private:
     void getAdapter(IDXGIAdapter1 **adapter);
     void createDevice();
     void createCommandResources();
+    void createFence();
     void createDescriptorHeap();
     void createResources();
     void createPipeline();
@@ -40,6 +41,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
 
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
+    HANDLE m_fenceEvent = nullptr;
+    UINT64 m_fenceValue = 0;
+
     Microsoft::WRL::ComPtr<ID3D12Resource> m_buffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_uploadBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_outputBuffer;
@@ -48,7 +53,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 
-    constexpr static UINT64 DATA_COUNT = 1024;
+    constexpr static UINT64 DATA_COUNT = 64;
 
     std::array<Data, DATA_COUNT> m_data;
 };
