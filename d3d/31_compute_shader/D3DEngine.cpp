@@ -3,6 +3,8 @@
 #include <array>
 #include <iostream>
 
+#include <d3dcompiler.h>
+
 D3DEngine::D3DEngine()
 {
 #ifdef DEBUG
@@ -11,6 +13,10 @@ D3DEngine::D3DEngine()
 
     createDXGIFactory();
     createDevice();
+    createCommandResources();
+    createDescriptorHeap();
+    createResources();
+    createPipeline();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -152,5 +158,288 @@ void D3DEngine::createDevice()
     if (!m_device)
     {
         std::cerr << "Failed to create D3D12 device." << std::endl;
+    }
+}
+
+void D3DEngine::createCommandResources()
+{
+    HRESULT hr = m_device->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_COMPUTE,
+        IID_PPV_ARGS(&m_commandAllocator)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create command allocator." << std::endl;
+        return;
+    }
+
+    hr = m_device->CreateCommandList(
+        0,
+        D3D12_COMMAND_LIST_TYPE_COMPUTE,
+        m_commandAllocator.Get(),
+        nullptr,
+        IID_PPV_ARGS(&m_commandList)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create command list." << std::endl;
+        return;
+    }
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {
+        .Type = D3D12_COMMAND_LIST_TYPE_COMPUTE,
+        .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
+        .NodeMask = 0,
+    };
+    hr = m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create command queue." << std::endl;
+        return;
+    }
+}
+
+void D3DEngine::createDescriptorHeap()
+{
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        .NumDescriptors = 1,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        .NodeMask = 0,
+    };
+    HRESULT hr = m_device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_descriptorHeap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create descriptor heap." << std::endl;
+        return;
+    }
+}
+
+void D3DEngine::createResources()
+{
+    for (size_t i = 0; i < m_data.size(); ++i)
+    {
+        m_data[i].value = static_cast<float>(i);
+        m_data[i].id = 0;
+    }
+
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0,
+    };
+    D3D12_RESOURCE_DESC resourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = sizeof(Data) * DATA_COUNT,
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+    };
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        nullptr,
+        IID_PPV_ARGS(&m_buffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create buffer resource." << std::endl;
+        return;
+    }
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
+        .Buffer = {
+            .FirstElement = 0,
+            .NumElements = DATA_COUNT,
+            .StructureByteStride = sizeof(Data),
+            .CounterOffsetInBytes = 0,
+            .Flags = D3D12_BUFFER_UAV_FLAG_NONE
+        }
+    };
+    D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = m_descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    m_device->CreateUnorderedAccessView(
+        m_buffer.Get(),
+        nullptr,
+        &uavDesc,
+        uavHandle
+    );
+
+    D3D12_HEAP_PROPERTIES uploadHeapProperties = {
+        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0,
+    };
+    D3D12_RESOURCE_DESC uploadResourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = sizeof(Data) * DATA_COUNT,
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+    hr = m_device->CreateCommittedResource(
+        &uploadHeapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &uploadResourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_uploadBuffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create upload buffer resource." << std::endl;
+        return;
+    }
+
+    D3D12_HEAP_PROPERTIES outputHeapProperties = {
+        .Type = D3D12_HEAP_TYPE_READBACK,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0,
+    };
+    D3D12_RESOURCE_DESC outputResourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = sizeof(Data) * DATA_COUNT,
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+    hr = m_device->CreateCommittedResource(
+        &outputHeapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &outputResourceDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(&m_outputBuffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create output buffer resource." << std::endl;
+        return;
+    }
+
+    Data* uploadData = nullptr;
+    hr = m_uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&uploadData));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map upload buffer." << std::endl;
+        return;
+    }
+    std::ranges::copy(m_data, uploadData);
+    m_uploadBuffer->Unmap(0, nullptr);
+
+    m_commandList->CopyResource(m_buffer.Get(), m_uploadBuffer.Get());
+}
+
+void D3DEngine::createPipeline()
+{
+    D3D12_DESCRIPTOR_RANGE range = {
+        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+        .NumDescriptors = 1,
+        .BaseShaderRegister = 0,
+        .RegisterSpace = 0,
+    };
+    D3D12_ROOT_PARAMETER parameter = {
+        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+        .DescriptorTable = {
+            .NumDescriptorRanges = 1,
+            .pDescriptorRanges = &range
+        }
+    };
+
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+        .NumParameters = 1,
+        .pParameters = &parameter,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE
+    };
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3D12SerializeRootSignature(
+        &rootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signatureBlob,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to serialize root signature: " << (errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "Unknown error") << std::endl;
+        return;
+    }
+
+    hr = m_device->CreateRootSignature(
+        0,
+        signatureBlob->GetBufferPointer(),
+        signatureBlob->GetBufferSize(),
+        IID_PPV_ARGS(&m_rootSignature)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create root signature." << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3DBlob> computeShaderBlob;
+    hr = D3DCompileFromFile(
+        L"cs.hlsl",
+        nullptr,
+        nullptr,
+        "main",
+        "cs_5_1",
+        0,
+        0,
+        &computeShaderBlob,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to compile compute shader: " << (errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "Unknown error") << std::endl;
+        return;
+    }
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pipelineStateDesc = {
+        .pRootSignature = m_rootSignature.Get(),
+        .CS = {
+            .pShaderBytecode = computeShaderBlob->GetBufferPointer(),
+            .BytecodeLength = computeShaderBlob->GetBufferSize()
+        },
+        .NodeMask = 0,
+        .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+    };
+
+    hr = m_device->CreateComputePipelineState(
+        &pipelineStateDesc,
+        IID_PPV_ARGS(&m_pipelineState)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create compute pipeline state." << std::endl;
+        return;
     }
 }
