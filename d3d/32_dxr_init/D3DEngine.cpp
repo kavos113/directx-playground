@@ -184,22 +184,6 @@ void D3DEngine::createDevice()
         );
         if (SUCCEEDED(hr))
         {
-            D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
-            hr = m_device->CheckFeatureSupport(
-                D3D12_FEATURE_D3D12_OPTIONS5,
-                &options5,
-                sizeof(options5)
-            );
-            if (SUCCEEDED(hr) && options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
-            {
-                std::cout << "Ray tracing: Supported." << std::endl;
-            }
-            else
-            {
-                std::cerr << "Ray tracing: Not Supported." << std::endl;
-                continue;
-            }
-
             return;
         }
     }
