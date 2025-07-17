@@ -79,10 +79,10 @@ private:
     static constexpr UINT FRAME_COUNT = 2;
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
-    Microsoft::WRL::ComPtr<ID3D12Device> m_device;
+    Microsoft::WRL::ComPtr<ID3D12Device5> m_device;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> m_commandList;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
