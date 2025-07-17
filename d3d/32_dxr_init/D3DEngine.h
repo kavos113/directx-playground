@@ -57,6 +57,8 @@ private:
     void recordCommands(UINT frameIndex);
     void endFrame(UINT frameIndex);
 
+    void executeCommand(UINT frameIndex);
+
     void waitForFence(UINT frameIndex);
 
     std::unique_ptr<Debug> m_debug;
