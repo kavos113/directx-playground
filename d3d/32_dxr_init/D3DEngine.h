@@ -31,31 +31,6 @@ private:
     struct Vertex
     {
         DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT4 color;
-
-        static auto inputLayout()
-        {
-            return std::array{
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "POSITION",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = 0,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                },
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "COLOR",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                }
-            };
-        }
     };
 
     void createDXGIFactory();
@@ -66,7 +41,17 @@ private:
     void createSwapChainResources();
     void createFence();
 
+    void createBuffer(
+        ID3D12Resource **buffer,
+        size_t size,
+        D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_GENERIC_READ
+    );
+
     void createVertexBuffer();
+
+    void createAS();
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
@@ -96,19 +81,21 @@ private:
     const std::vector<Vertex> m_vertices = {
         {
             {0.0f, 0.5f, 0.0f},
-            {1.0f, 0.0f, 0.0f, 1.0f}
         },
         {
             {-0.5f, -0.5f, 0.0f},
-            {0.0f, 1.0f, 0.0f, 1.0f}
         },
         {
             {0.5f, -0.5f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 1.0f}
         }
     };
 
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_tlas;
+    uint32_t m_tlasSize = 0;
 };
 
 

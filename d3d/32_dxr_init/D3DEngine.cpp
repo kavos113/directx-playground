@@ -19,6 +19,9 @@ D3DEngine::D3DEngine(HWND hwnd)
     createFence();
 
     createVertexBuffer();
+
+    // ray tracing resources
+    createAS();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -437,47 +440,61 @@ void D3DEngine::waitForFence()
     }
 }
 
-void D3DEngine::createVertexBuffer()
+void D3DEngine::createBuffer(
+    ID3D12Resource** buffer,
+    size_t size,
+    D3D12_HEAP_TYPE heapType,
+    D3D12_RESOURCE_FLAGS flags,
+    D3D12_RESOURCE_STATES initialState
+)
 {
     D3D12_HEAP_PROPERTIES heapProperties = {
-        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .Type = heapType,
         .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
         .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
         .CreationNodeMask = 0,
         .VisibleNodeMask = 0
     };
-
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
         .Alignment = 0,
-        .Width = sizeof(Vertex) * m_vertices.size(),
+        .Width = size,
         .Height = 1,
         .DepthOrArraySize = 1,
         .MipLevels = 1,
         .Format = DXGI_FORMAT_UNKNOWN,
         .SampleDesc = {1, 0},
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        .Flags = D3D12_RESOURCE_FLAG_NONE
+        .Flags = flags
     };
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer;
-
     HRESULT hr = m_device->CreateCommittedResource(
         &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
+        initialState,
         nullptr,
-        IID_PPV_ARGS(&vertexBuffer)
+        IID_PPV_ARGS(buffer)
     );
     if (FAILED(hr))
     {
-        std::cerr << "Failed to create vertex buffer." << std::endl;
+        std::cerr << "Failed to create buffer resource." << std::endl;
         return;
     }
+}
+
+void D3DEngine::createVertexBuffer()
+{
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer;
+    createBuffer(
+        vertexBuffer.GetAddressOf(),
+        sizeof(Vertex) * m_vertices.size(),
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATE_GENERIC_READ
+    );
 
     Vertex *vertexMap = nullptr;
-    hr = vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
+    HRESULT hr = vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map vertex buffer." << std::endl;
@@ -491,4 +508,68 @@ void D3DEngine::createVertexBuffer()
         .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
         .StrideInBytes = sizeof(Vertex)
     };
+}
+
+void D3DEngine::createAS()
+{
+    // blas
+    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {
+        .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+        .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
+        .Triangles = {
+            .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
+            .VertexCount = static_cast<UINT>(m_vertices.size()),
+            .VertexBuffer = {
+                .StartAddress = m_vertexBuffer->GetGPUVirtualAddress(),
+                .StrideInBytes = sizeof(Vertex)
+            },
+        }
+    };
+
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {
+        .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
+        .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
+        .NumDescs = 1,
+        .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+        .pGeometryDescs = &geometryDesc
+    };
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
+    m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> blasScratch;
+    createBuffer(
+        blasScratch.GetAddressOf(),
+        prebuildInfo.ScratchDataSizeInBytes,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+    );
+    createBuffer(
+        m_blas.GetAddressOf(),
+        prebuildInfo.ResultDataMaxSizeInBytes,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
+    );
+
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC blasDesc = {
+        .DestAccelerationStructureData = m_blas->GetGPUVirtualAddress(),
+        .Inputs = inputs,
+        .ScratchAccelerationStructureData = blasScratch->GetGPUVirtualAddress(),
+    };
+    m_commandList->BuildRaytracingAccelerationStructure(
+        &blasDesc,
+        0,
+        nullptr
+    );
+
+    D3D12_RESOURCE_BARRIER barrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_UAV,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .UAV = {
+            .pResource = m_blas.Get()
+        }
+    };
+    m_commandList->ResourceBarrier(1, &barrier);
 }
