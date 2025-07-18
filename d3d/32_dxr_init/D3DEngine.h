@@ -97,6 +97,20 @@ private:
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
 
     const wchar_t *SHADER_FILE = L"shader.hlsl";
+    const wchar_t *RAYGEN_SHADER = L"RayGen";
+    const wchar_t *MISS_SHADER = L"MissShader";
+    const wchar_t *CLOSE_SHADER = L"ClosestHitShader";
+    const wchar_t *HIT_GROUP = L"HitGroup";
+
+    struct BuiltInTriangleIntersectionAttributes
+    {
+        DirectX::XMFLOAT2 barycentrics;
+    };
+
+    struct RayTracingPayload
+    {
+        bool hit;
+    };
 };
 
 

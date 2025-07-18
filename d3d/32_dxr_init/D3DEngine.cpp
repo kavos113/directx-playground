@@ -771,17 +771,17 @@ void D3DEngine::createRaytracingPipelineState()
 
     std::array exportDescs = {
         D3D12_EXPORT_DESC{
-            .Name = L"RayGen",
+            .Name = RAYGEN_SHADER,
             .ExportToRename = nullptr,
             .Flags = D3D12_EXPORT_FLAG_NONE
         },
         D3D12_EXPORT_DESC{
-            .Name = L"MissShader",
+            .Name = MISS_SHADER,
             .ExportToRename = nullptr,
             .Flags = D3D12_EXPORT_FLAG_NONE
         },
         D3D12_EXPORT_DESC{
-            .Name = L"ClosestHitShader",
+            .Name = CLOSE_SHADER,
             .ExportToRename = nullptr,
             .Flags = D3D12_EXPORT_FLAG_NONE
         }
@@ -801,4 +801,47 @@ void D3DEngine::createRaytracingPipelineState()
         .pDesc = &dxilLibDesc
     };
 
+    // hit group
+    D3D12_HIT_GROUP_DESC hitGroupDesc = {
+        .HitGroupExport = HIT_GROUP,
+        .ClosestHitShaderImport = CLOSE_SHADER,
+    };
+    subobjects[1] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,
+        .pDesc = &hitGroupDesc
+    };
+
+    // shader config
+    D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {
+        .MaxPayloadSizeInBytes = sizeof(RayTracingPayload),
+        .MaxAttributeSizeInBytes = sizeof(BuiltInTriangleIntersectionAttributes)
+    };
+    subobjects[2] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,
+        .pDesc = &shaderConfig
+    };
+
+    std::array exportNames = {
+        RAYGEN_SHADER,
+        MISS_SHADER,
+        CLOSE_SHADER
+    };
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION subobjectToExportsAssociation = {
+        .pSubobjectToAssociate = &subobjects[2],
+        .NumExports = static_cast<UINT>(exportNames.size()),
+        .pExports = exportNames.data()
+    };
+    subobjects[3] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
+        .pDesc = &subobjectToExportsAssociation
+    };
+
+    // pipeline config
+    D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {
+        .MaxTraceRecursionDepth = 0
+    };
+    subobjects[4] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,
+        .pDesc = &pipelineConfig
+    };
 }
