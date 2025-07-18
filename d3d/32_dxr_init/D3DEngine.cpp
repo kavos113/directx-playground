@@ -1021,4 +1021,19 @@ void D3DEngine::createRaytracingPipelineState()
         .pDesc = &missHitAssociation
     };
 
+    D3D12_STATE_OBJECT_DESC stateObjectDesc = {
+        .Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,
+        .NumSubobjects = static_cast<UINT>(subobjects.size()),
+        .pSubobjects = subobjects.data()
+    };
+    hr = m_device->CreateStateObject(
+        &stateObjectDesc,
+        IID_PPV_ARGS(&m_raytracingPipelineState)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create ray tracing pipeline state." << std::endl;
+        return;
+    }
+
 }
