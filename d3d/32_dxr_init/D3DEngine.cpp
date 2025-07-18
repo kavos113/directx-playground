@@ -789,8 +789,8 @@ void D3DEngine::createRaytracingPipelineState()
 
     D3D12_DXIL_LIBRARY_DESC dxilLibDesc = {
         .DXILLibrary = {
+            .pShaderBytecode = shaderBlob->GetBufferPointer(),
             .BytecodeLength = shaderBlob->GetBufferSize(),
-            .pShaderBytecode = shaderBlob->GetBufferPointer()
         },
         .NumExports = static_cast<UINT>(exportDescs.size()),
         .pExports = exportDescs.data()
@@ -907,11 +907,11 @@ void D3DEngine::createRaytracingPipelineState()
     };
     D3D12_ROOT_PARAMETER param = {
         .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
         .DescriptorTable = {
             .NumDescriptorRanges = static_cast<UINT>(ranges.size()),
             .pDescriptorRanges = ranges.data()
-        }
+        },
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
     };
     D3D12_ROOT_SIGNATURE_DESC raygenRootSignatureDesc = {
         .NumParameters = 1,
