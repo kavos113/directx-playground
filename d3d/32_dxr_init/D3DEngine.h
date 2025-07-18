@@ -52,6 +52,7 @@ private:
     void createVertexBuffer();
 
     void createAS();
+    void createRaytracingPipelineState();
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
@@ -92,6 +93,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_tlas;
     uint32_t m_tlasSize = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
+
+    const wchar_t *SHADER_FILE = L"shader.hlsl";
 };
 
 

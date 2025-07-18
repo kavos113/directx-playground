@@ -1,5 +1,7 @@
 #include "D3DEngine.h"
 
+#include <dxcapi.h>
+
 #include <array>
 #include <iostream>
 
@@ -22,6 +24,7 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     // ray tracing resources
     createAS();
+    createRaytracingPipelineState();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -671,4 +674,131 @@ void D3DEngine::createAS()
     m_commandList->ResourceBarrier(1, &tlasBarrier);
 
     executeCommand(0);
+}
+
+void D3DEngine::createRaytracingPipelineState()
+{
+    std::array<D3D12_STATE_SUBOBJECT, 10> subobjects = {};
+
+    // dxil library
+    Microsoft::WRL::ComPtr<IDxcCompiler3> compiler;
+    Microsoft::WRL::ComPtr<IDxcUtils> utils;
+    HRESULT hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create DXC compiler instance." << std::endl;
+        return;
+    }
+    hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create DXC utils instance." << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler;
+    hr = utils->CreateDefaultIncludeHandler(&includeHandler);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create default include handler." << std::endl;
+        return;
+    }
+
+    std::array args = {
+        SHADER_FILE,
+        L"-T", L"lib_6_3",
+    };
+
+    Microsoft::WRL::ComPtr<IDxcBlobEncoding> sourceBlob;
+    hr = utils->LoadFile(SHADER_FILE, nullptr, &sourceBlob);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to load shader file." << std::endl;
+        return;
+    }
+
+    DxcBuffer sourceBuffer = {
+        .Ptr = sourceBlob->GetBufferPointer(),
+        .Size = sourceBlob->GetBufferSize(),
+        .Encoding = DXC_CP_ACP
+    };
+
+    Microsoft::WRL::ComPtr<IDxcResult> result;
+    hr = compiler->Compile(
+        &sourceBuffer,
+        args.data(),
+        args.size(),
+        includeHandler.Get(),
+        IID_PPV_ARGS(&result)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to compile shader." << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcBlobUtf8> errors;
+    hr = result->GetOutput(
+        DXC_OUT_ERRORS,
+        IID_PPV_ARGS(&errors),
+        nullptr
+    );
+    if (FAILED(hr) || (errors != nullptr && errors->GetStringLength() > 0))
+    {
+        std::cerr << "Shader compilation errors: " << (errors ? errors->GetStringPointer() : "None") << std::endl;
+        return;
+    }
+
+    result->GetStatus(&hr);
+    if (FAILED(hr))
+    {
+        std::cerr << "Shader compilation failed with error code: " << hr << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcBlob> shaderBlob;
+    Microsoft::WRL::ComPtr<IDxcBlobUtf16> shaderName;
+    hr = result->GetOutput(
+        DXC_OUT_OBJECT,
+        IID_PPV_ARGS(&shaderBlob),
+        &shaderName
+    );
+    if (FAILED(hr) || !shaderBlob)
+    {
+        std::cerr << "Failed to get compiled shader object." << std::endl;
+        return;
+    }
+
+    std::array exportDescs = {
+        D3D12_EXPORT_DESC{
+            .Name = L"RayGen",
+            .ExportToRename = nullptr,
+            .Flags = D3D12_EXPORT_FLAG_NONE
+        },
+        D3D12_EXPORT_DESC{
+            .Name = L"MissShader",
+            .ExportToRename = nullptr,
+            .Flags = D3D12_EXPORT_FLAG_NONE
+        },
+        D3D12_EXPORT_DESC{
+            .Name = L"ClosestHitShader",
+            .ExportToRename = nullptr,
+            .Flags = D3D12_EXPORT_FLAG_NONE
+        }
+    };
+
+    D3D12_DXIL_LIBRARY_DESC dxilLibDesc = {
+        .DXILLibrary = {
+            .BytecodeLength = shaderBlob->GetBufferSize(),
+            .pShaderBytecode = shaderBlob->GetBufferPointer()
+        },
+        .NumExports = static_cast<UINT>(exportDescs.size()),
+        .pExports = exportDescs.data()
+    };
+
+    subobjects[0] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,
+        .pDesc = &dxilLibDesc
+    };
+
 }
