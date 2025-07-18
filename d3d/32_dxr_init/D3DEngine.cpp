@@ -16,6 +16,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     createDevice();
     m_debug->setupCallback(m_device);
 
+    GetClientRect(hwnd, &m_windowRect);
+
     createCommandResources();
     createSwapChain(hwnd);
     createFence();
@@ -26,12 +28,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createAS();
     createRaytracingPipelineState();
     createShaderTable();
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    createRaytracingResources(
-        static_cast<UINT>(rc.right - rc.left),
-        static_cast<UINT>(rc.bottom - rc.top)
-    );
+    createRaytracingResources();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -376,24 +373,73 @@ void D3DEngine::beginFrame(UINT frameIndex)
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
         .Transition = {
-            .pResource = m_backBuffers[frameIndex].Get(),
+            .pResource = m_raytracingOutput.Get(),
             .Subresource = 0,
-            .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
-            .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE,
+            .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
         }
     };
     m_commandList->ResourceBarrier(1, &barrier);
-
-    auto rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    rtvHandle.ptr += frameIndex * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-    m_commandList->OMSetRenderTargets(1, &rtvHandle, TRUE, nullptr);
-    m_commandList->ClearRenderTargetView(rtvHandle, m_clearColor.data(), 0, nullptr);
-
 }
 
 void D3DEngine::recordCommands(UINT frameIndex)
 {
+    std::array descHeaps = {m_descHeap.Get()};
+    m_commandList->SetDescriptorHeaps(descHeaps.size(), descHeaps.data());
+
+    D3D12_DISPATCH_RAYS_DESC dispatchDesc = {
+        .RayGenerationShaderRecord = {
+            .StartAddress = m_shaderTable->GetGPUVirtualAddress(),
+            .SizeInBytes = m_shaderRecordSize
+        },
+        .MissShaderTable = {
+            .StartAddress = m_shaderTable->GetGPUVirtualAddress() + m_shaderRecordSize,
+            .SizeInBytes = m_shaderRecordSize,
+            .StrideInBytes = m_shaderRecordSize
+        },
+        .HitGroupTable = {
+            .StartAddress = m_shaderTable->GetGPUVirtualAddress() + 2 * m_shaderRecordSize,
+            .SizeInBytes = m_shaderRecordSize,
+            .StrideInBytes = m_shaderRecordSize
+        },
+        .Width = static_cast<UINT>(m_windowRect.right - m_windowRect.left),
+        .Height = static_cast<UINT>(m_windowRect.bottom - m_windowRect.top),
+        .Depth = 1
+    };
+
+    m_commandList->SetComputeRootSignature(m_rootSignature.Get());
+    m_commandList->SetPipelineState1(m_raytracingPipelineState.Get());
+
+    m_commandList->DispatchRays(&dispatchDesc);
+
+    std::array barriers = {
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_raytracingOutput.Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE
+            }
+        },
+        D3D12_RESOURCE_BARRIER{
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition = {
+                .pResource = m_backBuffers[frameIndex].Get(),
+                .Subresource = 0,
+                .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
+                .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST
+            }
+        }
+    };
+    m_commandList->ResourceBarrier(barriers.size(), barriers.data());
+
+    m_commandList->CopyResource(
+        m_backBuffers[frameIndex].Get(),
+        m_raytracingOutput.Get()
+    );
 }
 
 void D3DEngine::endFrame(UINT frameIndex)
@@ -404,7 +450,7 @@ void D3DEngine::endFrame(UINT frameIndex)
         .Transition = {
             .pResource = m_backBuffers[frameIndex].Get(),
             .Subresource = 0,
-            .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
             .StateAfter = D3D12_RESOURCE_STATE_PRESENT
         }
     };
@@ -874,12 +920,11 @@ void D3DEngine::createRaytracingPipelineState()
         return;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
     hr = m_device->CreateRootSignature(
         0,
         signature->GetBufferPointer(),
         signature->GetBufferSize(),
-        IID_PPV_ARGS(&rootSignature)
+        IID_PPV_ARGS(&m_rootSignature)
     );
     if (FAILED(hr))
     {
@@ -888,7 +933,7 @@ void D3DEngine::createRaytracingPipelineState()
     }
 
     D3D12_GLOBAL_ROOT_SIGNATURE globalRootSignature = {
-        .pGlobalRootSignature = rootSignature.Get()
+        .pGlobalRootSignature = m_rootSignature.Get()
     };
     subobjects[5] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,
@@ -1062,15 +1107,15 @@ void D3DEngine::createShaderTable()
     }
 
     // must align the largest record size
-    UINT recordSize = align(
+    m_shaderRecordSize = align(
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + sizeof(D3D12_GPU_DESCRIPTOR_HANDLE),
         D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT
     );
-    UINT totalSize = recordSize * 3;
+    UINT totalSize = m_shaderRecordSize * 3;
 
     createBuffer(
         m_shaderTable.GetAddressOf(),
-        recordSize,
+        totalSize,
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_FLAG_NONE,
         D3D12_RESOURCE_STATE_GENERIC_READ
@@ -1093,14 +1138,14 @@ void D3DEngine::createShaderTable()
 
     // miss
     memcpy(
-        shaderTableData + recordSize,
+        shaderTableData + m_shaderRecordSize,
         stateObjectProperties->GetShaderIdentifier(MISS_SHADER),
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
     );
 
     // hit group
     memcpy(
-        shaderTableData + 2 * recordSize,
+        shaderTableData + 2 * m_shaderRecordSize,
         stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
     );
@@ -1109,7 +1154,7 @@ void D3DEngine::createShaderTable()
 
 }
 
-void D3DEngine::createRaytracingResources(UINT width, UINT height)
+void D3DEngine::createRaytracingResources()
 {
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -1137,8 +1182,8 @@ void D3DEngine::createRaytracingResources(UINT width, UINT height)
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Alignment = 0,
-        .Width = width,
-        .Height = height,
+        .Width = static_cast<UINT64>(m_windowRect.right - m_windowRect.left),
+        .Height = static_cast<UINT>(m_windowRect.bottom - m_windowRect.top),
         .DepthOrArraySize = 1,
         .MipLevels = 1,
         .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -1150,7 +1195,7 @@ void D3DEngine::createRaytracingResources(UINT width, UINT height)
         &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
         nullptr,
         IID_PPV_ARGS(&m_raytracingOutput)
     );
@@ -1164,12 +1209,14 @@ void D3DEngine::createRaytracingResources(UINT width, UINT height)
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
         .Format = DXGI_FORMAT_UNKNOWN,
-        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+        .ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
         .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-        .RaytracingAccelerationStructure.Location = m_tlas->GetGPUVirtualAddress()
+        .RaytracingAccelerationStructure = {
+            .Location = m_tlas->GetGPUVirtualAddress(),
+        }
     };
     m_device->CreateShaderResourceView(
-        m_tlas.Get(),
+        nullptr,
         &srvDesc,
         srvHandle
     );

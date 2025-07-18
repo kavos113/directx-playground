@@ -54,7 +54,7 @@ private:
     void createAS();
     void createRaytracingPipelineState();
     void createShaderTable();
-    void createRaytracingResources(UINT width, UINT height);
+    void createRaytracingResources();
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
@@ -67,6 +67,8 @@ private:
     std::unique_ptr<Debug> m_debug;
 
     static constexpr UINT FRAME_COUNT = 2;
+
+    RECT m_windowRect = {};
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> m_dxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device5> m_device;
@@ -97,9 +99,11 @@ private:
     uint32_t m_tlasSize = 0;
 
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_shaderTable;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_raytracingOutput;
+    UINT m_shaderRecordSize = 0;
 
     const wchar_t *SHADER_FILE = L"shader.hlsl";
     const wchar_t *RAYGEN_SHADER = L"RayGen";
