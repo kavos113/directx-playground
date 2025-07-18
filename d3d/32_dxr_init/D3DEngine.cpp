@@ -25,6 +25,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     // ray tracing resources
     createAS();
     createRaytracingPipelineState();
+    createShaderTable();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -1035,5 +1036,69 @@ void D3DEngine::createRaytracingPipelineState()
         std::cerr << "Failed to create ray tracing pipeline state." << std::endl;
         return;
     }
+
+}
+
+UINT align(UINT value, UINT alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+// layout: | raygen shader | miss shader | hit group |
+void D3DEngine::createShaderTable()
+{
+    Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
+    HRESULT hr = m_raytracingPipelineState.As(&stateObjectProperties);
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to get state object properties." << std::endl;
+        return;
+    }
+
+    // must align the largest record size
+    UINT recordSize = align(
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + sizeof(D3D12_GPU_DESCRIPTOR_HANDLE),
+        D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT
+    );
+    UINT totalSize = recordSize * 3;
+
+    createBuffer(
+        m_shaderTable.GetAddressOf(),
+        recordSize,
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATE_GENERIC_READ
+    );
+
+    uint8_t *shaderTableData = nullptr;
+    hr = m_shaderTable->Map(0, nullptr, reinterpret_cast<void**>(&shaderTableData));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map shader table." << std::endl;
+        return;
+    }
+
+    // raygen
+    memcpy(
+        shaderTableData,
+        stateObjectProperties->GetShaderIdentifier(RAYGEN_SHADER),
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+
+    // miss
+    memcpy(
+        shaderTableData + recordSize,
+        stateObjectProperties->GetShaderIdentifier(MISS_SHADER),
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+
+    // hit group
+    memcpy(
+        shaderTableData + 2 * recordSize,
+        stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+
+    m_shaderTable->Unmap(0, nullptr);
 
 }

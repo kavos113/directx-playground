@@ -53,6 +53,7 @@ private:
 
     void createAS();
     void createRaytracingPipelineState();
+    void createShaderTable();
 
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
@@ -95,6 +96,7 @@ private:
     uint32_t m_tlasSize = 0;
 
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_shaderTable;
 
     const wchar_t *SHADER_FILE = L"shader.hlsl";
     const wchar_t *RAYGEN_SHADER = L"RayGen";
@@ -109,7 +111,7 @@ private:
 
     struct RayTracingPayload
     {
-        bool hit;
+        float hit; // 4 byte offset
     };
 };
 
