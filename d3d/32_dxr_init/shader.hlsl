@@ -5,7 +5,7 @@ RWTexture2D<float4> output : register(u0);
 void RayGen() 
 {
     uint3 dispatchIndex = DispatchRaysIndex();
-    output[dispatchIndex.xy] = float4(0.0f, 0.0f, 0.0f, 1.0f); // Clear output to black
+    output[dispatchIndex.xy] = float4(0.4f, 0.2f, 0.8f, 1.0f); // Clear output to black
 }
 
 struct Payload 

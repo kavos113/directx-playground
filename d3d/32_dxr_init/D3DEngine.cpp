@@ -27,8 +27,8 @@ D3DEngine::D3DEngine(HWND hwnd)
     // ray tracing resources
     createAS();
     createRaytracingPipelineState();
-    createShaderTable();
     createRaytracingResources();
+    createShaderTable();
 }
 
 D3DEngine::~D3DEngine() = default;
@@ -1104,6 +1104,12 @@ void D3DEngine::createShaderTable()
         shaderTableData,
         stateObjectProperties->GetShaderIdentifier(RAYGEN_SHADER),
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+    UINT64 srvHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+    memcpy(
+        shaderTableData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+        &srvHandle,
+        sizeof(D3D12_GPU_DESCRIPTOR_HANDLE)
     );
 
     // miss
