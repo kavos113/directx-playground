@@ -78,7 +78,6 @@ private:
 
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapchain;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FRAME_COUNT> m_backBuffers;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
     std::array<float, 4> m_clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
     std::array<Microsoft::WRL::ComPtr<ID3D12Fence>, FRAME_COUNT> m_fence;

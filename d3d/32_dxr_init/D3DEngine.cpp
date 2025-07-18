@@ -61,7 +61,6 @@ void D3DEngine::cleanup()
 
     m_commandList.Reset();
 
-    m_rtvHeap.Reset();
     for (auto& buffer : m_backBuffers)
     {
         buffer.Reset();
@@ -302,43 +301,14 @@ void D3DEngine::createSwapChain(HWND hwnd)
 
 void D3DEngine::createSwapChainResources()
 {
-    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
-        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        .NumDescriptors = 2,
-        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-        .NodeMask = 0
-    };
-    HRESULT hr = m_device->CreateDescriptorHeap(
-        &rtvHeapDesc,
-        IID_PPV_ARGS(&m_rtvHeap)
-    );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create RTV descriptor heap." << std::endl;
-        return;
-    }
-
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
-    hr = m_swapchain->GetDesc1(&swapChainDesc);
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to get swap chain description." << std::endl;
-        return;
-    }
-
     for (UINT i = 0; i < FRAME_COUNT; ++i)
     {
-        hr = m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_backBuffers[i]));
+        HRESULT hr = m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_backBuffers[i]));
         if (FAILED(hr))
         {
             std::cerr << "Failed to get back buffer from swap chain." << std::endl;
             return;
         }
-
-        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-        rtvHandle.ptr += i * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-        m_device->CreateRenderTargetView(m_backBuffers[i].Get(), nullptr, rtvHandle);
     }
 }
 
