@@ -844,4 +844,181 @@ void D3DEngine::createRaytracingPipelineState()
         .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,
         .pDesc = &pipelineConfig
     };
+
+    // global root signature
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+        .NumParameters = 0,
+        .pParameters = nullptr,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE
+    };
+    Microsoft::WRL::ComPtr<ID3DBlob> signature;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    hr = D3D12SerializeRootSignature(
+        &rootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signature,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to serialize root signature: " << (errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "Unknown error") << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+    hr = m_device->CreateRootSignature(
+        0,
+        signature->GetBufferPointer(),
+        signature->GetBufferSize(),
+        IID_PPV_ARGS(&rootSignature)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create root signature." << std::endl;
+        return;
+    }
+
+    D3D12_GLOBAL_ROOT_SIGNATURE globalRootSignature = {
+        .pGlobalRootSignature = rootSignature.Get()
+    };
+    subobjects[5] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,
+        .pDesc = &globalRootSignature
+    };
+
+    // local root signature (for ray gen shader)
+    std::array ranges = {
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 0,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        },
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 0,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        }
+    };
+    D3D12_ROOT_PARAMETER param = {
+        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+        .DescriptorTable = {
+            .NumDescriptorRanges = static_cast<UINT>(ranges.size()),
+            .pDescriptorRanges = ranges.data()
+        }
+    };
+    D3D12_ROOT_SIGNATURE_DESC raygenRootSignatureDesc = {
+        .NumParameters = 1,
+        .pParameters = &param,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE
+    };
+    hr = D3D12SerializeRootSignature(
+        &raygenRootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signature,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to serialize local root signature: " << (errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "Unknown error") << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> raygenRootSignature;
+    hr = m_device->CreateRootSignature(
+        0,
+        signature->GetBufferPointer(),
+        signature->GetBufferSize(),
+        IID_PPV_ARGS(&raygenRootSignature)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create local root signature." << std::endl;
+        return;
+    }
+
+    D3D12_LOCAL_ROOT_SIGNATURE localRootSignature = {
+        .pLocalRootSignature = raygenRootSignature.Get()
+    };
+    subobjects[6] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
+        .pDesc = &localRootSignature
+    };
+
+    std::array raygenShaderExports = {
+        RAYGEN_SHADER
+    };
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygenAssociation = {
+        .pSubobjectToAssociate = &subobjects[6],
+        .NumExports = static_cast<UINT>(raygenShaderExports.size()),
+        .pExports = raygenShaderExports.data()
+    };
+    subobjects[7] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
+        .pDesc = &raygenAssociation
+    };
+
+    // local root signature (for miss/hit shader)
+    D3D12_ROOT_SIGNATURE_DESC missHitRootSignatureDesc = {
+        .NumParameters = 0,
+        .pParameters = nullptr,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE
+    };
+    hr = D3D12SerializeRootSignature(
+        &missHitRootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signature,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to serialize miss/hit local root signature: " << (errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "Unknown error") << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> missHitRootSignature;
+    hr = m_device->CreateRootSignature(
+        0,
+        signature->GetBufferPointer(),
+        signature->GetBufferSize(),
+        IID_PPV_ARGS(&missHitRootSignature)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create miss/hit local root signature." << std::endl;
+        return;
+    }
+
+    D3D12_LOCAL_ROOT_SIGNATURE missHitLocalRootSignature = {
+        .pLocalRootSignature = missHitRootSignature.Get()
+    };
+    subobjects[8] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
+        .pDesc = &missHitLocalRootSignature
+    };
+
+    std::array missHitShaderExports = {
+        MISS_SHADER,
+        CLOSE_SHADER
+    };
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION missHitAssociation = {
+        .pSubobjectToAssociate = &subobjects[8],
+        .NumExports = static_cast<UINT>(missHitShaderExports.size()),
+        .pExports = missHitShaderExports.data()
+    };
+    subobjects[9] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
+        .pDesc = &missHitAssociation
+    };
+
 }
