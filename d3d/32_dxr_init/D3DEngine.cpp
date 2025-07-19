@@ -649,6 +649,8 @@ void D3DEngine::createAS()
     m_tlasSize = static_cast<uint32_t>(tlasPrebuildInfo.ResultDataMaxSizeInBytes);
 
     DirectX::XMMATRIX transform = DirectX::XMMatrixIdentity();
+    DirectX::XMFLOAT3X4 transformMatrix;
+    DirectX::XMStoreFloat3x4(&transformMatrix, DirectX::XMMatrixTranspose(transform));
     D3D12_RAYTRACING_INSTANCE_DESC *instanceDesc = nullptr;
     HRESULT hr = m_instanceDescBuffer->Map(0, nullptr, reinterpret_cast<void**>(&instanceDesc));
     if (FAILED(hr))
@@ -661,10 +663,7 @@ void D3DEngine::createAS()
     instanceDesc->InstanceContributionToHitGroupIndex = 0;
     instanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
     instanceDesc->AccelerationStructure = m_blas->GetGPUVirtualAddress();
-    DirectX::XMStoreFloat4x4(
-        reinterpret_cast<DirectX::XMFLOAT4X4*>(&instanceDesc->Transform),
-        DirectX::XMMatrixTranspose(transform)
-    );
+    memcpy(instanceDesc->Transform, &transformMatrix, sizeof(transformMatrix));
     m_instanceDescBuffer->Unmap(0, nullptr);
 
     tlasInputs.InstanceDescs = m_instanceDescBuffer->GetGPUVirtualAddress();
