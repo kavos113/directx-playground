@@ -3,7 +3,7 @@ RWTexture2D<float4> output : register(u0);
 
 cbuffer Colors : register(b0)
 {
-    float4 colors[3];
+    float4 color;
 };
 
 struct Payload 
@@ -55,5 +55,5 @@ void ClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttri
 {
     uint instanceID = InstanceID();
 
-    payload.color = colors[instanceID % 3]; 
+    payload.color = color;
 }

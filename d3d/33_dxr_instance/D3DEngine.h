@@ -98,7 +98,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceDescBuffer;
     uint32_t m_tlasSize = 0;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 3> m_colorBuffers;
 
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;

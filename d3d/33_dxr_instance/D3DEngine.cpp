@@ -370,7 +370,7 @@ void D3DEngine::recordCommands(UINT frameIndex)
         },
         .HitGroupTable = {
             .StartAddress = m_shaderTable->GetGPUVirtualAddress() + 2 * m_shaderRecordSize,
-            .SizeInBytes = m_shaderRecordSize,
+            .SizeInBytes = m_shaderRecordSize * 3,
             .StrideInBytes = m_shaderRecordSize
         },
         .Width = static_cast<UINT>(m_windowRect.right - m_windowRect.left),
@@ -672,7 +672,7 @@ void D3DEngine::createAS()
         memcpy(instanceDesc[i].Transform, &transformMatrix, sizeof(transformMatrix));
         instanceDesc[i].InstanceID = static_cast<UINT>(i);
         instanceDesc[i].InstanceMask = 0xFF;
-        instanceDesc[i].InstanceContributionToHitGroupIndex = 0;
+        instanceDesc[i].InstanceContributionToHitGroupIndex = i;
         instanceDesc[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
         instanceDesc[i].AccelerationStructure = m_blas->GetGPUVirtualAddress();
     }
@@ -1133,7 +1133,7 @@ UINT align(UINT value, UINT alignment)
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
-// layout: | raygen shader | miss shader | hit group |
+// layout: | raygen shader | miss shader | hit group 0 | hit group 1 | hit group 2 |
 void D3DEngine::createShaderTable()
 {
     Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
@@ -1149,7 +1149,7 @@ void D3DEngine::createShaderTable()
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + sizeof(D3D12_GPU_DESCRIPTOR_HANDLE),
         D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT
     );
-    UINT totalSize = m_shaderRecordSize * 3;
+    UINT totalSize = m_shaderRecordSize * 5;
 
     createBuffer(
         m_shaderTable.GetAddressOf(),
@@ -1188,17 +1188,20 @@ void D3DEngine::createShaderTable()
     );
 
     // hit group
-    memcpy(
-        shaderTableData + 2 * m_shaderRecordSize,
-        stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
-        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
-    );
-    D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = m_colorBuffer->GetGPUVirtualAddress();
-    memcpy(
-        shaderTableData + 2 * m_shaderRecordSize + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
-        &cbvHandle,
-        sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
-    );
+    for (UINT i = 0; i < 3; ++i)
+    {
+        memcpy(
+            shaderTableData + (2 + i) * m_shaderRecordSize,
+            stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
+            D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+        );
+        D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = m_colorBuffers[i]->GetGPUVirtualAddress();
+        memcpy(
+            shaderTableData + (2 + i) * m_shaderRecordSize + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+            &cbvHandle,
+            sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
+        );
+    }
 
     m_shaderTable->Unmap(0, nullptr);
 
@@ -1300,7 +1303,7 @@ void D3DEngine::createColorBuffer()
     D3D12_RESOURCE_DESC resourceDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
         .Alignment = 0,
-        .Width = align(sizeof(DirectX::XMFLOAT4) * m_colors.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
+        .Width = sizeof(DirectX::XMFLOAT4),
         .Height = 1,
         .DepthOrArraySize = 1,
         .MipLevels = 1,
@@ -1309,29 +1312,31 @@ void D3DEngine::createColorBuffer()
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
-    HRESULT hr = m_device->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_colorBuffer)
-    );
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to create color buffer resource." << std::endl;
-        return;
-    }
 
-    DirectX::XMFLOAT4 *colorMap = nullptr;
-    hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
-    if (FAILED(hr))
+    for (UINT i = 0; i < m_colors.size(); ++i)
     {
-        std::cerr << "Failed to map color buffer." << std::endl;
-        return;
-    }
-    std::ranges::copy(m_colors, colorMap);
-    m_colorBuffer->Unmap(0, nullptr);
+        HRESULT hr = m_device->CreateCommittedResource(
+            &heapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &resourceDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&m_colorBuffers[i])
+        );
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to create color buffer resource." << std::endl;
+            return;
+        }
 
-    m_colorBuffer->SetName(L"Color Buffer");
+        DirectX::XMFLOAT4 *colorMap = nullptr;
+        hr = m_colorBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
+        if (FAILED(hr))
+        {
+            std::cerr << "Failed to map color buffer." << std::endl;
+            return;
+        }
+        memcpy(colorMap, &m_colors[i], sizeof(DirectX::XMFLOAT4));
+        m_colorBuffers[i]->Unmap(0, nullptr);
+    }
 }
