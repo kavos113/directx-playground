@@ -41,7 +41,7 @@ void RayGen()
 [shader("miss")]
 void MissShader(inout Payload payload) 
 {
-    payload.color = float4(0.0f, 0.2f, 0.8f, 1.0f);
+    payload.color = float4(0.4f, 0.6f, 0.8f, 1.0f);
 }
 
 
