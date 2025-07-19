@@ -534,13 +534,13 @@ void D3DEngine::createVertexBuffer()
 {
     createBuffer(
         m_vertexBuffer.GetAddressOf(),
-        sizeof(Vertex) * m_vertices.size(),
+        sizeof(DirectX::XMFLOAT3) * m_vertices.size(),
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_FLAG_NONE,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
-    Vertex *vertexMap = nullptr;
+    DirectX::XMFLOAT3 *vertexMap = nullptr;
     HRESULT hr = m_vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
     if (FAILED(hr))
     {
@@ -549,12 +549,6 @@ void D3DEngine::createVertexBuffer()
     }
     std::ranges::copy(m_vertices, vertexMap);
     m_vertexBuffer->Unmap(0, nullptr);
-
-    m_vertexBufferView = {
-        .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
-        .StrideInBytes = sizeof(Vertex)
-    };
 }
 
 void D3DEngine::createAS()
@@ -568,7 +562,7 @@ void D3DEngine::createAS()
             .VertexCount = static_cast<UINT>(m_vertices.size()),
             .VertexBuffer = {
                 .StartAddress = m_vertexBuffer->GetGPUVirtualAddress(),
-                .StrideInBytes = sizeof(Vertex)
+                .StrideInBytes = sizeof(DirectX::XMFLOAT3)
             },
         }
     };
@@ -631,7 +625,6 @@ void D3DEngine::createAS()
     m_device->GetRaytracingAccelerationStructurePrebuildInfo(&tlasInputs, &tlasPrebuildInfo);
 
     Microsoft::WRL::ComPtr<ID3D12Resource> tlasScratch;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instanceDescBuffer;
     createBuffer(
         tlasScratch.GetAddressOf(),
         tlasPrebuildInfo.ScratchDataSizeInBytes,
@@ -647,7 +640,7 @@ void D3DEngine::createAS()
         D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
     );
     createBuffer(
-        instanceDescBuffer.GetAddressOf(),
+        m_instanceDescBuffer.GetAddressOf(),
         sizeof(D3D12_RAYTRACING_INSTANCE_DESC),
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_FLAG_NONE,
@@ -657,7 +650,7 @@ void D3DEngine::createAS()
 
     DirectX::XMMATRIX transform = DirectX::XMMatrixIdentity();
     D3D12_RAYTRACING_INSTANCE_DESC *instanceDesc = nullptr;
-    HRESULT hr = instanceDescBuffer->Map(0, nullptr, reinterpret_cast<void**>(&instanceDesc));
+    HRESULT hr = m_instanceDescBuffer->Map(0, nullptr, reinterpret_cast<void**>(&instanceDesc));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map instance descriptor buffer." << std::endl;
@@ -672,14 +665,14 @@ void D3DEngine::createAS()
         reinterpret_cast<DirectX::XMFLOAT4X4*>(&instanceDesc->Transform),
         DirectX::XMMatrixTranspose(transform)
     );
-    instanceDescBuffer->Unmap(0, nullptr);
+    m_instanceDescBuffer->Unmap(0, nullptr);
 
+    tlasInputs.InstanceDescs = m_instanceDescBuffer->GetGPUVirtualAddress();
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC tlasDesc = {
         .DestAccelerationStructureData = m_tlas->GetGPUVirtualAddress(),
         .Inputs = tlasInputs,
         .ScratchAccelerationStructureData = tlasScratch->GetGPUVirtualAddress(),
     };
-    tlasDesc.Inputs.InstanceDescs = instanceDescBuffer->GetGPUVirtualAddress();
 
     m_commandList->BuildRaytracingAccelerationStructure(
         &tlasDesc,
@@ -697,6 +690,9 @@ void D3DEngine::createAS()
     m_commandList->ResourceBarrier(1, &tlasBarrier);
 
     executeCommand(0);
+
+    m_tlas->SetName(L"Top Level Acceleration Structure");
+    m_blas->SetName(L"Bottom Level Acceleration Structure");
 }
 
 void D3DEngine::createRaytracingPipelineState()

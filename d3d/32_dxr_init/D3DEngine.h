@@ -28,11 +28,6 @@ public:
     void render();
 
 private:
-    struct Vertex
-    {
-        DirectX::XMFLOAT3 position;
-    };
-
     void createDXGIFactory();
     void getAdapter(IDXGIAdapter1 **adapter);
     void createDevice();
@@ -84,17 +79,16 @@ private:
     std::array<UINT64, FRAME_COUNT> m_fenceValues = {};
     std::array<HANDLE, FRAME_COUNT> m_fenceEvents = {};
 
-    const std::vector<Vertex> m_vertices = {
-        {{0.0f, 0.5f, 0.0f},},
-        {{-0.5f, -0.5f, 0.0f},},
-        {{0.5f, -0.5f, 0.0f},}
+    const std::vector<DirectX::XMFLOAT3> m_vertices = {
+        {0.0f, 0.5f, 0.0f},
+        {-0.5f, -0.5f, 0.0f},
+        {0.5f, -0.5f, 0.0f},
     };
-
-    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_tlas;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceDescBuffer;
     uint32_t m_tlasSize = 0;
 
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
@@ -117,7 +111,7 @@ private:
 
     struct RayTracingPayload
     {
-        float hit; // 4 byte offset
+        DirectX::XMFLOAT4 color;
     };
 };
 
