@@ -28,6 +28,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createAS();
     createRaytracingPipelineState();
     createRaytracingResources();
+    createColorBuffer();
     createShaderTable();
 }
 
@@ -707,7 +708,7 @@ void D3DEngine::createAS()
 
 void D3DEngine::createRaytracingPipelineState()
 {
-    std::array<D3D12_STATE_SUBOBJECT, 10> subobjects = {};
+    std::array<D3D12_STATE_SUBOBJECT, 12> subobjects = {};
 
     // dxil library
     Microsoft::WRL::ComPtr<IDxcCompiler3> compiler;
@@ -994,16 +995,24 @@ void D3DEngine::createRaytracingPipelineState()
         .pDesc = &raygenAssociation
     };
 
-    // local root signature (for miss/hit shader)
-    D3D12_ROOT_SIGNATURE_DESC missHitRootSignatureDesc = {
-        .NumParameters = 0,
-        .pParameters = nullptr,
+    // local root signature (for hit shader)
+    D3D12_ROOT_PARAMETER hitParam = {
+        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+        .Descriptor = {
+            .ShaderRegister = 0,
+            .RegisterSpace = 0
+        },
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+    };
+    D3D12_ROOT_SIGNATURE_DESC hitRootSignatureDesc = {
+        .NumParameters = 1,
+        .pParameters = &hitParam,
         .NumStaticSamplers = 0,
         .pStaticSamplers = nullptr,
         .Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE
     };
     hr = D3D12SerializeRootSignature(
-        &missHitRootSignatureDesc,
+        &hitRootSignatureDesc,
         D3D_ROOT_SIGNATURE_VERSION_1,
         &signature,
         &errorBlob
@@ -1014,12 +1023,12 @@ void D3DEngine::createRaytracingPipelineState()
         return;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> missHitRootSignature;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> hitRootSignature;
     hr = m_device->CreateRootSignature(
         0,
         signature->GetBufferPointer(),
         signature->GetBufferSize(),
-        IID_PPV_ARGS(&missHitRootSignature)
+        IID_PPV_ARGS(&hitRootSignature)
     );
     if (FAILED(hr))
     {
@@ -1027,26 +1036,79 @@ void D3DEngine::createRaytracingPipelineState()
         return;
     }
 
-    D3D12_LOCAL_ROOT_SIGNATURE missHitLocalRootSignature = {
-        .pLocalRootSignature = missHitRootSignature.Get()
+    D3D12_LOCAL_ROOT_SIGNATURE hitLocalRootSignature = {
+        .pLocalRootSignature = hitRootSignature.Get()
     };
     subobjects[8] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
-        .pDesc = &missHitLocalRootSignature
+        .pDesc = &hitLocalRootSignature
     };
 
-    std::array missHitShaderExports = {
-        MISS_SHADER,
+    std::array hitShaderExports = {
         CLOSE_SHADER
     };
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION missHitAssociation = {
         .pSubobjectToAssociate = &subobjects[8],
-        .NumExports = static_cast<UINT>(missHitShaderExports.size()),
-        .pExports = missHitShaderExports.data()
+        .NumExports = static_cast<UINT>(hitShaderExports.size()),
+        .pExports = hitShaderExports.data()
     };
     subobjects[9] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
         .pDesc = &missHitAssociation
+    };
+
+    // local root signature (for miss shader)
+    D3D12_ROOT_SIGNATURE_DESC missRootSignatureDesc = {
+        .NumParameters = 0,
+        .pParameters = nullptr,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE
+    };
+    hr = D3D12SerializeRootSignature(
+        &missRootSignatureDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &signature,
+        &errorBlob
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to serialize miss local root signature: " << (errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "Unknown error") << std::endl;
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> missRootSignature;
+    hr = m_device->CreateRootSignature(
+        0,
+        signature->GetBufferPointer(),
+        signature->GetBufferSize(),
+        IID_PPV_ARGS(&missRootSignature)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create miss local root signature." << std::endl;
+        return;
+    }
+
+    D3D12_LOCAL_ROOT_SIGNATURE missLocalRootSignature = {
+        .pLocalRootSignature = missRootSignature.Get()
+    };
+    subobjects[10] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
+        .pDesc = &missLocalRootSignature
+    };
+
+    std::array missShaderExports = {
+        MISS_SHADER
+    };
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION missAssociation = {
+        .pSubobjectToAssociate = &subobjects[10],
+        .NumExports = static_cast<UINT>(missShaderExports.size()),
+        .pExports = missShaderExports.data()
+    };
+    subobjects[11] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
+        .pDesc = &missAssociation
     };
 
     D3D12_STATE_OBJECT_DESC stateObjectDesc = {
@@ -1130,6 +1192,12 @@ void D3DEngine::createShaderTable()
         shaderTableData + 2 * m_shaderRecordSize,
         stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+    D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = m_colorBuffer->GetGPUVirtualAddress();
+    memcpy(
+        shaderTableData + 2 * m_shaderRecordSize + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+        &cbvHandle,
+        sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
     );
 
     m_shaderTable->Unmap(0, nullptr);
@@ -1218,4 +1286,52 @@ void D3DEngine::createRaytracingResources()
         &uavDesc,
         srvHandle
     );
+}
+
+void D3DEngine::createColorBuffer()
+{
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        .Type = D3D12_HEAP_TYPE_UPLOAD,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+    D3D12_RESOURCE_DESC resourceDesc = {
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = align(sizeof(DirectX::XMFLOAT4) * m_colors.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT),
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = {1, 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_colorBuffer)
+    );
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to create color buffer resource." << std::endl;
+        return;
+    }
+
+    DirectX::XMFLOAT4 *colorMap = nullptr;
+    hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map color buffer." << std::endl;
+        return;
+    }
+    std::ranges::copy(m_colors, colorMap);
+    m_colorBuffer->Unmap(0, nullptr);
+
+    m_colorBuffer->SetName(L"Color Buffer");
 }

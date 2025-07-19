@@ -1,6 +1,11 @@
 RaytracingAccelerationStructure sceneAS : register(t0);
 RWTexture2D<float4> output : register(u0);
 
+cbuffer Colors : register(b0)
+{
+    float4 colors[3];
+};
+
 struct Payload 
 {
     float4 color;
@@ -48,8 +53,7 @@ void MissShader(inout Payload payload)
 [shader("closesthit")]
 void ClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttributes attr)
 {
-    float u = attr.barycentrics.x;
-    float v = attr.barycentrics.y;
-    float w = 1.0f - u - v;
-    payload.color = float4(u, v, w, 1.0f); 
+    uint instanceID = InstanceID();
+
+    payload.color = colors[instanceID % 3]; 
 }
