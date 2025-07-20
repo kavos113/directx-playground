@@ -34,7 +34,7 @@ void RayGen()
         RAY_FLAG_NONE, 
         0xFF, 
         0, 
-        0, 
+        1, 
         0,
         ray, 
         payload
@@ -56,4 +56,10 @@ void ClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttri
     uint instanceID = InstanceID();
 
     payload.color = color;
+}
+
+[shader("closesthit")]
+void PlaneClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttributes attr)
+{
+    payload.color = float4(0.7f, 0.7f, 0.7f, 1.0f); 
 }

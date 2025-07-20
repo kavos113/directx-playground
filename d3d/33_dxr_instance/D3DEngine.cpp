@@ -370,7 +370,7 @@ void D3DEngine::recordCommands(UINT frameIndex)
         },
         .HitGroupTable = {
             .StartAddress = m_shaderTable->GetGPUVirtualAddress() + 2 * m_shaderRecordSize,
-            .SizeInBytes = m_shaderRecordSize * 3,
+            .SizeInBytes = m_shaderRecordSize * 4,
             .StrideInBytes = m_shaderRecordSize
         },
         .Width = static_cast<UINT>(m_windowRect.right - m_windowRect.left),
@@ -777,7 +777,7 @@ void D3DEngine::createAS()
         memcpy(instanceDesc[i].Transform, &transformMatrix, sizeof(transformMatrix));
         instanceDesc[i].InstanceID = static_cast<UINT>(i);
         instanceDesc[i].InstanceMask = 0xFF;
-        instanceDesc[i].InstanceContributionToHitGroupIndex = i;
+        instanceDesc[i].InstanceContributionToHitGroupIndex = i + 1;
         instanceDesc[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
         instanceDesc[i].AccelerationStructure = m_blas->GetGPUVirtualAddress();
     }
@@ -813,7 +813,7 @@ void D3DEngine::createAS()
 
 void D3DEngine::createRaytracingPipelineState()
 {
-    std::array<D3D12_STATE_SUBOBJECT, 12> subobjects = {};
+    std::array<D3D12_STATE_SUBOBJECT, 13> subobjects = {};
 
     // dxil library
     Microsoft::WRL::ComPtr<IDxcCompiler3> compiler;
@@ -919,6 +919,11 @@ void D3DEngine::createRaytracingPipelineState()
             .Name = CLOSE_SHADER,
             .ExportToRename = nullptr,
             .Flags = D3D12_EXPORT_FLAG_NONE
+        },
+        D3D12_EXPORT_DESC{
+            .Name = PLANE_CLOSE_SHADER,
+            .ExportToRename = nullptr,
+            .Flags = D3D12_EXPORT_FLAG_NONE
         }
     };
 
@@ -946,12 +951,21 @@ void D3DEngine::createRaytracingPipelineState()
         .pDesc = &hitGroupDesc
     };
 
+    D3D12_HIT_GROUP_DESC planeHitGroupDesc = {
+        .HitGroupExport = PLANE_HIT_GROUP,
+        .ClosestHitShaderImport = PLANE_CLOSE_SHADER,
+    };
+    subobjects[2] = D3D12_STATE_SUBOBJECT{
+        .Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,
+        .pDesc = &planeHitGroupDesc
+    };
+
     // shader config
     D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {
         .MaxPayloadSizeInBytes = sizeof(RayTracingPayload),
         .MaxAttributeSizeInBytes = sizeof(BuiltInTriangleIntersectionAttributes)
     };
-    subobjects[2] = D3D12_STATE_SUBOBJECT{
+    subobjects[3] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,
         .pDesc = &shaderConfig
     };
@@ -959,14 +973,15 @@ void D3DEngine::createRaytracingPipelineState()
     std::array exportNames = {
         RAYGEN_SHADER,
         MISS_SHADER,
-        CLOSE_SHADER
+        CLOSE_SHADER,
+        PLANE_CLOSE_SHADER,
     };
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION subobjectToExportsAssociation = {
-        .pSubobjectToAssociate = &subobjects[2],
+        .pSubobjectToAssociate = &subobjects[3],
         .NumExports = static_cast<UINT>(exportNames.size()),
         .pExports = exportNames.data()
     };
-    subobjects[3] = D3D12_STATE_SUBOBJECT{
+    subobjects[4] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
         .pDesc = &subobjectToExportsAssociation
     };
@@ -975,7 +990,7 @@ void D3DEngine::createRaytracingPipelineState()
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {
         .MaxTraceRecursionDepth = 0
     };
-    subobjects[4] = D3D12_STATE_SUBOBJECT{
+    subobjects[5] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,
         .pDesc = &pipelineConfig
     };
@@ -1017,7 +1032,7 @@ void D3DEngine::createRaytracingPipelineState()
     D3D12_GLOBAL_ROOT_SIGNATURE globalRootSignature = {
         .pGlobalRootSignature = m_rootSignature.Get()
     };
-    subobjects[5] = D3D12_STATE_SUBOBJECT{
+    subobjects[6] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,
         .pDesc = &globalRootSignature
     };
@@ -1082,7 +1097,7 @@ void D3DEngine::createRaytracingPipelineState()
     D3D12_LOCAL_ROOT_SIGNATURE localRootSignature = {
         .pLocalRootSignature = raygenRootSignature.Get()
     };
-    subobjects[6] = D3D12_STATE_SUBOBJECT{
+    subobjects[7] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
         .pDesc = &localRootSignature
     };
@@ -1091,11 +1106,11 @@ void D3DEngine::createRaytracingPipelineState()
         RAYGEN_SHADER
     };
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygenAssociation = {
-        .pSubobjectToAssociate = &subobjects[6],
+        .pSubobjectToAssociate = &subobjects[7],
         .NumExports = static_cast<UINT>(raygenShaderExports.size()),
         .pExports = raygenShaderExports.data()
     };
-    subobjects[7] = D3D12_STATE_SUBOBJECT{
+    subobjects[8] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
         .pDesc = &raygenAssociation
     };
@@ -1144,7 +1159,7 @@ void D3DEngine::createRaytracingPipelineState()
     D3D12_LOCAL_ROOT_SIGNATURE hitLocalRootSignature = {
         .pLocalRootSignature = hitRootSignature.Get()
     };
-    subobjects[8] = D3D12_STATE_SUBOBJECT{
+    subobjects[9] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
         .pDesc = &hitLocalRootSignature
     };
@@ -1153,16 +1168,16 @@ void D3DEngine::createRaytracingPipelineState()
         CLOSE_SHADER
     };
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION missHitAssociation = {
-        .pSubobjectToAssociate = &subobjects[8],
+        .pSubobjectToAssociate = &subobjects[9],
         .NumExports = static_cast<UINT>(hitShaderExports.size()),
         .pExports = hitShaderExports.data()
     };
-    subobjects[9] = D3D12_STATE_SUBOBJECT{
+    subobjects[10] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
         .pDesc = &missHitAssociation
     };
 
-    // local root signature (for miss shader)
+    // local root signature (for miss shader, plane hit group)
     D3D12_ROOT_SIGNATURE_DESC missRootSignatureDesc = {
         .NumParameters = 0,
         .pParameters = nullptr,
@@ -1198,20 +1213,21 @@ void D3DEngine::createRaytracingPipelineState()
     D3D12_LOCAL_ROOT_SIGNATURE missLocalRootSignature = {
         .pLocalRootSignature = missRootSignature.Get()
     };
-    subobjects[10] = D3D12_STATE_SUBOBJECT{
+    subobjects[11] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,
         .pDesc = &missLocalRootSignature
     };
 
     std::array missShaderExports = {
-        MISS_SHADER
+        MISS_SHADER,
+        PLANE_CLOSE_SHADER
     };
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION missAssociation = {
-        .pSubobjectToAssociate = &subobjects[10],
+        .pSubobjectToAssociate = &subobjects[11],
         .NumExports = static_cast<UINT>(missShaderExports.size()),
         .pExports = missShaderExports.data()
     };
-    subobjects[11] = D3D12_STATE_SUBOBJECT{
+    subobjects[12] = D3D12_STATE_SUBOBJECT{
         .Type = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,
         .pDesc = &missAssociation
     };
@@ -1238,7 +1254,7 @@ UINT align(UINT value, UINT alignment)
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
-// layout: | raygen shader | miss shader | hit group 0 | hit group 1 | hit group 2 |
+// layout: | raygen shader | miss shader | hit group 0 / geom 0 | hit group 0 / geom 1 | hit group 1 | hit group 2 |
 void D3DEngine::createShaderTable()
 {
     Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
@@ -1254,7 +1270,7 @@ void D3DEngine::createShaderTable()
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + sizeof(D3D12_GPU_DESCRIPTOR_HANDLE),
         D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT
     );
-    UINT totalSize = m_shaderRecordSize * 5;
+    UINT totalSize = m_shaderRecordSize * 6;
 
     createBuffer(
         m_shaderTable.GetAddressOf(),
@@ -1292,17 +1308,24 @@ void D3DEngine::createShaderTable()
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
     );
 
+    // plane hit group
+    memcpy(
+        shaderTableData + 2 * m_shaderRecordSize,
+        stateObjectProperties->GetShaderIdentifier(PLANE_HIT_GROUP),
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+
     // hit group
     for (UINT i = 0; i < 3; ++i)
     {
         memcpy(
-            shaderTableData + (2 + i) * m_shaderRecordSize,
+            shaderTableData + (3 + i) * m_shaderRecordSize,
             stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
             D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
         );
         D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = m_colorBuffers[i]->GetGPUVirtualAddress();
         memcpy(
-            shaderTableData + (2 + i) * m_shaderRecordSize + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+            shaderTableData + (3 + i) * m_shaderRecordSize + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
             &cbvHandle,
             sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
         );
