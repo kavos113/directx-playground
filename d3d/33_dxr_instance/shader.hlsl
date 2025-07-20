@@ -34,7 +34,7 @@ void RayGen()
         RAY_FLAG_NONE, 
         0xFF, 
         0, 
-        1, 
+        2, 
         0,
         ray, 
         payload
@@ -58,8 +58,53 @@ void ClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttri
     payload.color = color;
 }
 
+struct ShadowPayload 
+{
+    bool hit;
+};
+
 [shader("closesthit")]
 void PlaneClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttributes attr)
 {
-    payload.color = float4(0.7f, 0.7f, 0.7f, 1.0f); 
+    float t = RayTCurrent();
+    float3 worldDir = WorldRayDirection();
+    float3 worldOrigin = WorldRayOrigin();
+
+    float3 worldPos = worldOrigin + t * worldDir;
+
+    RayDesc ray;
+    ray.Origin = worldPos;
+    ray.Direction = normalize(float3(0.5f, 0.5f, -0.5f)); // light direction
+    ray.TMin = 0.001f;
+    ray.TMax = 100000.0f;
+
+    ShadowPayload shadowPayload;
+
+    TraceRay(
+        sceneAS,
+        RAY_FLAG_NONE,
+        0xFF,
+        1,
+        0,
+        1,
+        ray,
+        shadowPayload
+    );
+
+    float factor = shadowPayload.hit ? 0.1f : 1.0f;
+    payload.color = float4(0.9f, 0.9f, 0.9f, 1.0f) * factor;
+    payload.color.a = 1.0f; 
+}
+
+[shader("closesthit")]
+void ShadowClosestHitShader(inout ShadowPayload payload, in BuiltInTriangleIntersectionAttributes attr)
+{
+    payload.hit = true;
+}
+
+
+[shader("miss")]
+void ShadowMissShader(inout ShadowPayload payload)
+{
+    payload.hit = false;
 }

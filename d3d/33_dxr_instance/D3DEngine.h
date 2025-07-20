@@ -130,6 +130,9 @@ private:
     const wchar_t *HIT_GROUP = L"HitGroup";
     const wchar_t *PLANE_CLOSE_SHADER = L"PlaneClosestHitShader";
     const wchar_t *PLANE_HIT_GROUP = L"PlaneHitGroup";
+    const wchar_t *SHADOW_MISS_SHADER = L"ShadowMissShader";
+    const wchar_t *SHADOW_CLOSE_SHADER = L"ShadowClosestHitShader";
+    const wchar_t *SHADOW_HIT_GROUP = L"ShadowHitGroup";
 
     struct BuiltInTriangleIntersectionAttributes
     {
