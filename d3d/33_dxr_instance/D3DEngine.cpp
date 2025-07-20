@@ -22,7 +22,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createSwapChain(hwnd);
     createFence();
 
-    createVertexBuffer();
+    createVertexBuffers();
 
     // ray tracing resources
     createAS();
@@ -531,7 +531,7 @@ void D3DEngine::createBuffer(
     }
 }
 
-void D3DEngine::createVertexBuffer()
+void D3DEngine::createVertexBuffers()
 {
     createBuffer(
         m_vertexBuffer.GetAddressOf(),
@@ -550,6 +550,40 @@ void D3DEngine::createVertexBuffer()
     }
     std::ranges::copy(m_vertices, vertexMap);
     m_vertexBuffer->Unmap(0, nullptr);
+
+    createBuffer(
+        m_planeVertexBuffer.GetAddressOf(),
+        sizeof(DirectX::XMFLOAT3) * m_planeVertices.size(),
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATE_GENERIC_READ
+    );
+    DirectX::XMFLOAT3 *planeVertexMap = nullptr;
+    hr = m_planeVertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&planeVertexMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map plane vertex buffer." << std::endl;
+        return;
+    }
+    std::ranges::copy(m_planeVertices, planeVertexMap);
+    m_planeVertexBuffer->Unmap(0, nullptr);
+
+    createBuffer(
+        m_planeIndexBuffer.GetAddressOf(),
+        sizeof(uint32_t) * m_planeIndices.size(),
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATE_GENERIC_READ
+    );
+    uint32_t *planeIndexMap = nullptr;
+    hr = m_planeIndexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&planeIndexMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map plane index buffer." << std::endl;
+        return;
+    }
+    std::ranges::copy(m_planeIndices, planeIndexMap);
+    m_planeIndexBuffer->Unmap(0, nullptr);
 }
 
 void D3DEngine::createAS()
@@ -615,6 +649,73 @@ void D3DEngine::createAS()
     };
     m_commandList->ResourceBarrier(1, &barrier);
 
+    // plane + triangle blas
+    std::array planeGeometryDescs = {
+        D3D12_RAYTRACING_GEOMETRY_DESC{
+            .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+            .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
+            .Triangles = {
+                .IndexFormat = DXGI_FORMAT_R32_UINT,
+                .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
+                .IndexCount = static_cast<UINT>(m_planeIndices.size()),
+                .VertexCount = static_cast<UINT>(m_planeVertices.size()),
+                .IndexBuffer = m_planeIndexBuffer->GetGPUVirtualAddress(), // stride is defined at IndexFormat
+                .VertexBuffer = {
+                    .StartAddress = m_planeVertexBuffer->GetGPUVirtualAddress(),
+                    .StrideInBytes = sizeof(DirectX::XMFLOAT3)
+                },
+            }
+        },
+        geometryDesc
+    };
+
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS planeInputs = {
+        .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
+        .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE,
+        .NumDescs = static_cast<UINT>(planeGeometryDescs.size()),
+        .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+        .pGeometryDescs = planeGeometryDescs.data()
+    };
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO planePrebuildInfo = {};
+    m_device->GetRaytracingAccelerationStructurePrebuildInfo(&planeInputs, &planePrebuildInfo);
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> planeBlasScratch;
+    createBuffer(
+        planeBlasScratch.GetAddressOf(),
+        planePrebuildInfo.ScratchDataSizeInBytes,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+    );
+    createBuffer(
+        m_planeBlas.GetAddressOf(),
+        planePrebuildInfo.ResultDataMaxSizeInBytes,
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
+    );
+
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC planeBlasDesc = {
+        .DestAccelerationStructureData = m_planeBlas->GetGPUVirtualAddress(),
+        .Inputs = planeInputs,
+        .ScratchAccelerationStructureData = planeBlasScratch->GetGPUVirtualAddress(),
+    };
+    m_commandList->BuildRaytracingAccelerationStructure(
+        &planeBlasDesc,
+        0,
+        nullptr
+    );
+
+    D3D12_RESOURCE_BARRIER planeBarrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_UAV,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .UAV = {
+            .pResource = m_planeBlas.Get()
+        }
+    };
+    m_commandList->ResourceBarrier(1, &planeBarrier);
+
     // tlas
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlasInputs = {
         .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
@@ -662,13 +763,17 @@ void D3DEngine::createAS()
         return;
     }
 
-    for (size_t i = 0; i < matrices.size(); ++i)
+    DirectX::XMFLOAT3X4 transformMatrix;
+    DirectX::XMStoreFloat3x4(&transformMatrix, matrices[0]);
+    memcpy(instanceDesc[0].Transform, &transformMatrix, sizeof(transformMatrix));
+    instanceDesc[0].InstanceID = 0;
+    instanceDesc[0].InstanceMask = 0xFF;
+    instanceDesc[0].InstanceContributionToHitGroupIndex = 0;
+    instanceDesc[0].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+    instanceDesc[0].AccelerationStructure = m_planeBlas->GetGPUVirtualAddress();
+    for (size_t i = 1; i < matrices.size(); ++i)
     {
-        DirectX::XMFLOAT3X4 transformMatrix;
-        DirectX::XMStoreFloat3x4(
-            &transformMatrix,
-            matrices[i]
-        );
+        DirectX::XMStoreFloat3x4(&transformMatrix, matrices[i]);
         memcpy(instanceDesc[i].Transform, &transformMatrix, sizeof(transformMatrix));
         instanceDesc[i].InstanceID = static_cast<UINT>(i);
         instanceDesc[i].InstanceMask = 0xFF;

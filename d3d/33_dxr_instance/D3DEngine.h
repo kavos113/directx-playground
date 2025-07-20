@@ -44,7 +44,7 @@ private:
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
-    void createVertexBuffer();
+    void createVertexBuffers();
 
     void createAS();
     void createRaytracingPipelineState();
@@ -86,6 +86,18 @@ private:
         {0.5f, -0.5f, 0.0f},
     };
 
+    const std::vector<DirectX::XMFLOAT3> m_planeVertices = {
+        {-10.0f, -1.0f, -10.0f},
+        {10.0f, -1.0f, -10.0f},
+        {10.0f, -1.0f, 10.0f},
+        {-10.0f, -1.0f, 10.0f},
+    };
+
+    const std::vector<uint32_t> m_planeIndices = {
+        0, 1, 2,
+        0, 2, 3
+    };
+
     const std::vector<DirectX::XMFLOAT4> m_colors = {
         {1.0f, 0.0f, 0.0f, 1.0f},
         {0.0f, 1.0f, 0.0f, 1.0f},
@@ -94,6 +106,10 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_planeVertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_planeIndexBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_planeBlas;
+
     Microsoft::WRL::ComPtr<ID3D12Resource> m_tlas;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceDescBuffer;
     uint32_t m_tlasSize = 0;
