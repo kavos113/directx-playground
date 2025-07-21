@@ -16,10 +16,9 @@ class Model
 public:
     Model(
         Microsoft::WRL::ComPtr<ID3D12Device> device,
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap,
         RECT rc
     );
-    void createView();
+    void createView(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap);
 
     void cleanup();
     void executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const;
@@ -77,7 +76,6 @@ private:
     );
 
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
 
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_copyCommandAllocator;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyCommandQueue;
@@ -87,13 +85,14 @@ private:
     HANDLE m_copyFenceEvent = nullptr;
 
     std::vector<Vertex> m_vertices;
-    std::vector<unsigned short> m_indices;
+    std::vector<uint32_t> m_indices;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
     D3D12_RAYTRACING_GEOMETRY_DESC m_geometryDesc = {};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
+    DXGI_FORMAT m_textureFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_waitForCopyResources;
     std::vector<D3D12_RESOURCE_BARRIER> m_barriers;

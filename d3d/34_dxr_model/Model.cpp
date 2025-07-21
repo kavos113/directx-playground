@@ -12,10 +12,8 @@
 
 Model::Model(
     Microsoft::WRL::ComPtr<ID3D12Device> device,
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap,
     RECT rc
-) : m_device(std::move(device)),
-    m_descHeap(std::move(descHeap))
+) : m_device(std::move(device))
 {
     createCopyCommands();
 
@@ -137,7 +135,7 @@ void Model::loadModel(const std::string &path)
     auto& attrib = reader.GetAttrib();
     auto& shapes = reader.GetShapes();
 
-    std::map<Vertex, unsigned short> uniqueVertices;
+    std::map<Vertex, uint32_t> uniqueVertices;
 
     for (const auto & shape : shapes)
     {
@@ -174,7 +172,7 @@ void Model::loadModel(const std::string &path)
 
                 if (!uniqueVertices.contains(vertex))
                 {
-                    uniqueVertices[vertex] = static_cast<unsigned short>(m_vertices.size());
+                    uniqueVertices[vertex] = static_cast<uint32_t>(m_vertices.size());
                     m_vertices.push_back(vertex);
                 }
 
@@ -226,7 +224,7 @@ void Model::createVertexBuffer()
 void Model::createIndexBuffer()
 {
     createBuffer(
-        sizeof(unsigned short) * m_indices.size(),
+        sizeof(uint32_t) * m_indices.size(),
         &m_indexBuffer,
         D3D12_HEAP_TYPE_DEFAULT,
         D3D12_RESOURCE_STATE_COMMON
@@ -234,13 +232,13 @@ void Model::createIndexBuffer()
 
     Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
     createBuffer(
-        sizeof(unsigned short) * m_indices.size(),
+        sizeof(uint32_t) * m_indices.size(),
         &stagingBuffer,
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 
-    unsigned short *indexMap = nullptr;
+    uint32_t *indexMap = nullptr;
     HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&indexMap));
     if (FAILED(hr))
     {
@@ -267,7 +265,7 @@ void Model::createGeometryDesc()
         .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
         .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
         .Triangles = {
-            .IndexFormat = DXGI_FORMAT_R16_UINT,
+            .IndexFormat = DXGI_FORMAT_R32_UINT,
             .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
             .IndexCount = static_cast<UINT>(m_indices.size()),
             .VertexCount = static_cast<UINT>(m_vertices.size()),
@@ -374,28 +372,9 @@ void Model::loadTexture(const std::wstring &path)
     );
 
     m_waitForCopyResources.push_back(stagingResource);
+    m_textureFormat = metadata.format;
 
-    // create SRV later
-    // D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
-    //     .Format = metadata.format,
-    //     .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-    //     .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-    //     .Texture2D = {
-    //         .MostDetailedMip = 0,
-    //         .MipLevels = static_cast<UINT>(metadata.mipLevels),
-    //         .PlaneSlice = 0,
-    //         .ResourceMinLODClamp = 0.0f
-    //     }
-    // };
-    //
-    // D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    // srvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    //
-    // m_device->CreateShaderResourceView(
-    //     m_texture.Get(),
-    //     &srvDesc,
-    //     srvHandle
-    // );
+    m_texture->SetName(L"Model Texture Resource");
 }
 
 // unsupported D3D12_HEAP_TYPE_CUSTOM
@@ -561,20 +540,20 @@ void Model::barrier(
     );
 }
 
-void Model::createView()
+void Model::createView(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap)
 {
-    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
     srvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC vertexDesc = {
-        .Format = DXGI_FORMAT_R32_TYPELESS,
+        .Format = DXGI_FORMAT_UNKNOWN,
         .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
         .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
         .Buffer = {
             .FirstElement = 0,
-            .NumElements = static_cast<UINT>(m_vertices.size()) * sizeof(Vertex) / sizeof(float),
-            .StructureByteStride = 0,
-            .Flags = D3D12_BUFFER_SRV_FLAG_RAW
+            .NumElements = static_cast<UINT>(m_vertices.size()),
+            .StructureByteStride = sizeof(Vertex),
+            .Flags = D3D12_BUFFER_SRV_FLAG_NONE,
         }
     };
     m_device->CreateShaderResourceView(
@@ -585,12 +564,12 @@ void Model::createView()
 
     srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     D3D12_SHADER_RESOURCE_VIEW_DESC indexDesc = {
-        .Format = DXGI_FORMAT_R16_TYPELESS,
+        .Format = DXGI_FORMAT_R32_TYPELESS,
         .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
         .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
         .Buffer = {
             .FirstElement = 0,
-            .NumElements = static_cast<UINT>(m_indices.size()) * sizeof(unsigned short) / sizeof(float),
+            .NumElements = static_cast<UINT>(m_indices.size()) * sizeof(uint32_t) / sizeof(float),
             .StructureByteStride = 0,
             .Flags = D3D12_BUFFER_SRV_FLAG_RAW
         }
@@ -603,7 +582,7 @@ void Model::createView()
 
     srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     D3D12_SHADER_RESOURCE_VIEW_DESC textureDesc = {
-        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .Format = m_textureFormat,
         .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
         .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
         .Texture2D = {

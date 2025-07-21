@@ -1,10 +1,18 @@
 RaytracingAccelerationStructure sceneAS : register(t0);
 RWTexture2D<float4> output : register(u0);
 
-cbuffer Colors : register(b0)
+struct Vertex 
 {
-    float4 color;
+    float3 position;
+    float3 normal;
+    float2 texcoord;
 };
+
+StructuredBuffer<Vertex> vertices : register(t1);
+ByteAddressBuffer indices : register(t2);
+Texture2D<float4> albedo : register(t3);
+
+SamplerState sam : register(s0);
 
 struct Payload 
 {
@@ -34,7 +42,7 @@ void RayGen()
         RAY_FLAG_NONE, 
         0xFF, 
         0, 
-        2, 
+        0, 
         0,
         ray, 
         payload
@@ -53,9 +61,21 @@ void MissShader(inout Payload payload)
 [shader("closesthit")]
 void ClosestHitShader(inout Payload payload, in BuiltInTriangleIntersectionAttributes attr)
 {
-    uint instanceID = InstanceID();
+    uint index = PrimitiveIndex();
 
-    payload.color = color;
+    uint i0 = indices.Load((index * 3 + 0) * 4);
+    uint i1 = indices.Load((index * 3 + 1) * 4);
+    uint i2 = indices.Load((index * 3 + 2) * 4);
+
+    float2 v0 = vertices[i0].texcoord;
+    float2 v1 = vertices[i1].texcoord;
+    float2 v2 = vertices[i2].texcoord;
+
+    float2 uv = v0 + attr.barycentrics.x * (v1 - v0) + attr.barycentrics.y * (v2 - v0);
+
+    float4 albedoColor = albedo.SampleLevel(sam, uv, 0);
+
+    payload.color = albedoColor;
 }
 
 struct ShadowPayload 

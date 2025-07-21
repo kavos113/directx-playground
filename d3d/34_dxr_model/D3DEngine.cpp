@@ -24,7 +24,6 @@ D3DEngine::D3DEngine(HWND hwnd)
 
     m_model = std::make_unique<Model>(
         m_device,
-        m_descHeap,
         m_windowRect
     );
     createVertexBuffers();
@@ -33,7 +32,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createAS();
     createRaytracingPipelineState();
     createRaytracingResources();
-    m_model->createView();
+    m_model->createView(m_descHeap);
     createShaderTable();
 }
 
@@ -386,11 +385,11 @@ void D3DEngine::recordCommands(UINT frameIndex)
         .Depth = 1
     };
 
-    // global root signature
-    m_commandList->SetComputeRootDescriptorTable(0, m_descHeap->GetGPUDescriptorHandleForHeapStart());
-
     m_commandList->SetComputeRootSignature(m_rootSignature.Get());
     m_commandList->SetPipelineState1(m_raytracingPipelineState.Get());
+
+    // global root signature
+    m_commandList->SetComputeRootDescriptorTable(0, m_descHeap->GetGPUDescriptorHandleForHeapStart());
 
     m_commandList->DispatchRays(&dispatchDesc);
 
@@ -1337,12 +1336,12 @@ void D3DEngine::createShaderTable()
         stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
     );
-    UINT srvHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+    UINT64 srvHandle = m_descHeap->GetGPUDescriptorHandleForHeapStart().ptr;
     srvHandle += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * 2; // skip tlas and output
     memcpy(
         shaderTableData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
         &srvHandle,
-        sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
+        sizeof(D3D12_GPU_DESCRIPTOR_HANDLE)
     );
     shaderTableData += m_shaderRecordSize;
 
