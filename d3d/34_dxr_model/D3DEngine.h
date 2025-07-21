@@ -84,10 +84,10 @@ private:
     std::array<HANDLE, FRAME_COUNT> m_fenceEvents = {};
 
     const std::vector<DirectX::XMFLOAT3> m_planeVertices = {
-        {-10.0f, -1.0f, -10.0f},
-        {10.0f, -1.0f, -10.0f},
-        {10.0f, -1.0f, 10.0f},
-        {-10.0f, -1.0f, 10.0f},
+        {-100.0f, -0.5f, -100.0f},
+        {100.0f, -0.5f, -100.0f},
+        {100.0f, -0.5f, 100.0f},
+        {-100.0f, -0.5f, 100.0f},
     };
 
     const std::vector<uint32_t> m_planeIndices = {

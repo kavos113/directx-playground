@@ -29,7 +29,7 @@ void RayGen()
     uv.y = -uv.y; 
 
     RayDesc ray;
-    ray.Origin = float3(0.0f, 0.0f, -2.0f); // Camera position
+    ray.Origin = float3(0.0f, 0.5f, -4.0f); // Camera position
     ray.Direction = normalize(float3(uv, 1.0f)); // Ray direction
     ray.TMin = 0.001f;
     ray.TMax = 1000.0f; 
@@ -92,9 +92,10 @@ void PlaneClosestHitShader(inout Payload payload, in BuiltInTriangleIntersection
 
     float3 worldPos = worldOrigin + t * worldDir;
 
+// shadow
     RayDesc ray;
     ray.Origin = worldPos;
-    ray.Direction = normalize(float3(0.5f, 0.5f, -0.5f)); // light direction
+    ray.Direction = normalize(float3(0.5f, 1.0f, -0.5f)); // light direction
     ray.TMin = 0.001f;
     ray.TMax = 100000.0f;
 
@@ -111,9 +112,38 @@ void PlaneClosestHitShader(inout Payload payload, in BuiltInTriangleIntersection
         shadowPayload
     );
 
-    float factor = shadowPayload.hit ? 0.1f : 1.0f;
-    payload.color = float4(0.9f, 0.9f, 0.9f, 1.0f) * factor;
-    payload.color.a = 1.0f; 
+    float shadowFactor = shadowPayload.hit ? 0.1f : 1.0f;
+    float4 baseColor = float4(0.9f, 0.9f, 0.9f, 1.0f) * shadowFactor;
+
+    // reflective color
+    float3 normal = float3(0.0f, 1.0f, 0.0f);
+
+    float3 reflectDir = reflect(worldDir, normal);
+
+    RayDesc reflectRay;
+    reflectRay.Origin = worldPos + normal * 0.001f; // 地面より少し上から
+    reflectRay.Direction = reflectDir;
+    reflectRay.TMin = 0.001f;
+    reflectRay.TMax = 100000.0f;
+
+    Payload reflectPayload;
+
+    TraceRay(
+        sceneAS,
+        RAY_FLAG_NONE,
+        0xFF,
+        0,
+        0,
+        0,
+        reflectRay,
+        reflectPayload
+    );
+
+    float4 reflectColor = reflectPayload.color;
+
+    float reflectFactor = 0.3f;
+
+    payload.color = lerp(baseColor, reflectColor, reflectFactor);
 }
 
 [shader("closesthit")]
