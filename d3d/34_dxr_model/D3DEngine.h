@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "Debug.h"
+#include "Model.h"
 
 class D3DEngine
 {
@@ -63,6 +64,7 @@ private:
     void waitForFence(UINT frameIndex);
 
     std::unique_ptr<Debug> m_debug;
+    std::unique_ptr<Model> m_model;
 
     static constexpr UINT FRAME_COUNT = 2;
 
@@ -82,12 +84,6 @@ private:
     std::array<UINT64, FRAME_COUNT> m_fenceValues = {};
     std::array<HANDLE, FRAME_COUNT> m_fenceEvents = {};
 
-    const std::vector<DirectX::XMFLOAT3> m_vertices = {
-        {0.0f, 0.5f, 0.0f},
-        {-0.5f, -0.5f, 0.0f},
-        {0.5f, -0.5f, 0.0f},
-    };
-
     const std::vector<DirectX::XMFLOAT3> m_planeVertices = {
         {-10.0f, -1.0f, -10.0f},
         {10.0f, -1.0f, -10.0f},
@@ -106,7 +102,6 @@ private:
         {0.0f, 0.0f, 1.0f, 1.0f},
     };
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_planeVertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_planeIndexBuffer;

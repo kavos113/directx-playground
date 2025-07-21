@@ -22,6 +22,11 @@ D3DEngine::D3DEngine(HWND hwnd)
     createSwapChain(hwnd);
     createFence();
 
+    m_model = std::make_unique<Model>(
+        m_device,
+        m_descHeap,
+        m_windowRect
+    );
     createVertexBuffers();
 
     // ray tracing resources
@@ -538,24 +543,6 @@ void D3DEngine::createBuffer(
 void D3DEngine::createVertexBuffers()
 {
     createBuffer(
-        m_vertexBuffer.GetAddressOf(),
-        sizeof(DirectX::XMFLOAT3) * m_vertices.size(),
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_FLAG_NONE,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    DirectX::XMFLOAT3 *vertexMap = nullptr;
-    HRESULT hr = m_vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&vertexMap));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map vertex buffer." << std::endl;
-        return;
-    }
-    std::ranges::copy(m_vertices, vertexMap);
-    m_vertexBuffer->Unmap(0, nullptr);
-
-    createBuffer(
         m_planeVertexBuffer.GetAddressOf(),
         sizeof(DirectX::XMFLOAT3) * m_planeVertices.size(),
         D3D12_HEAP_TYPE_UPLOAD,
@@ -563,7 +550,7 @@ void D3DEngine::createVertexBuffers()
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
     DirectX::XMFLOAT3 *planeVertexMap = nullptr;
-    hr = m_planeVertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&planeVertexMap));
+    HRESULT hr = m_planeVertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&planeVertexMap));
     if (FAILED(hr))
     {
         std::cerr << "Failed to map plane vertex buffer." << std::endl;
@@ -593,18 +580,7 @@ void D3DEngine::createVertexBuffers()
 void D3DEngine::createAS()
 {
     // blas
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {
-        .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
-        .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
-        .Triangles = {
-            .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
-            .VertexCount = static_cast<UINT>(m_vertices.size()),
-            .VertexBuffer = {
-                .StartAddress = m_vertexBuffer->GetGPUVirtualAddress(),
-                .StrideInBytes = sizeof(DirectX::XMFLOAT3)
-            },
-        }
-    };
+    auto geometryDesc = m_model->geometryDesc();
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {
         .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
@@ -654,31 +630,28 @@ void D3DEngine::createAS()
     m_commandList->ResourceBarrier(1, &barrier);
 
     // plane + triangle blas
-    std::array planeGeometryDescs = {
-        D3D12_RAYTRACING_GEOMETRY_DESC{
-            .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
-            .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
-            .Triangles = {
-                .IndexFormat = DXGI_FORMAT_R32_UINT,
-                .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
-                .IndexCount = static_cast<UINT>(m_planeIndices.size()),
-                .VertexCount = static_cast<UINT>(m_planeVertices.size()),
-                .IndexBuffer = m_planeIndexBuffer->GetGPUVirtualAddress(), // stride is defined at IndexFormat
-                .VertexBuffer = {
-                    .StartAddress = m_planeVertexBuffer->GetGPUVirtualAddress(),
-                    .StrideInBytes = sizeof(DirectX::XMFLOAT3)
-                },
-            }
-        },
-        geometryDesc
+    D3D12_RAYTRACING_GEOMETRY_DESC planeGeometryDesc = {
+        .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+        .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
+        .Triangles = {
+            .IndexFormat = DXGI_FORMAT_R32_UINT,
+            .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
+            .IndexCount = static_cast<UINT>(m_planeIndices.size()),
+            .VertexCount = static_cast<UINT>(m_planeVertices.size()),
+            .IndexBuffer = m_planeIndexBuffer->GetGPUVirtualAddress(), // stride is defined at IndexFormat
+            .VertexBuffer = {
+                .StartAddress = m_planeVertexBuffer->GetGPUVirtualAddress(),
+                .StrideInBytes = sizeof(DirectX::XMFLOAT3)
+            },
+        }
     };
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS planeInputs = {
         .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
         .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE,
-        .NumDescs = static_cast<UINT>(planeGeometryDescs.size()),
+        .NumDescs = 1,
         .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-        .pGeometryDescs = planeGeometryDescs.data()
+        .pGeometryDescs = &planeGeometryDesc
     };
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO planePrebuildInfo = {};

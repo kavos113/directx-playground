@@ -22,46 +22,16 @@ public:
     void cleanup();
     void executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const;
 
-    void render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList);
+    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc() const
+    {
+        return m_geometryDesc;
+    }
 
     struct Vertex
     {
         DirectX::XMFLOAT3 position;
         DirectX::XMFLOAT3 normal;
         DirectX::XMFLOAT2 uv;
-
-        static auto inputLayout()
-        {
-            return std::array{
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "POSITION",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = 0,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                },
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "NORMAL",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32B32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                },
-                D3D12_INPUT_ELEMENT_DESC{
-                    .SemanticName = "TEXCOORD",
-                    .SemanticIndex = 0,
-                    .Format = DXGI_FORMAT_R32G32_FLOAT,
-                    .InputSlot = 0,
-                    .AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT,
-                    .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    .InstanceDataStepRate = 0
-                }
-            };
-        }
 
         bool operator< (const Vertex &other) const
         {
@@ -74,28 +44,12 @@ public:
     };
 
 private:
-
-    struct MatrixBuffer
-    {
-        DirectX::XMMATRIX world;
-        DirectX::XMMATRIX view;
-        DirectX::XMMATRIX projection;
-    };
-
-    struct LightBuffer
-    {
-        DirectX::XMFLOAT3 direction;
-        float padding;
-        DirectX::XMFLOAT3 ambient;
-    };
-
     void createCopyCommands();
 
     void loadModel(const std::string &path);
     void createVertexBuffer();
     void createIndexBuffer();
-    void createMatrixBuffer(RECT rc);
-    void createLightBuffer();
+    void createGeometryDesc();
 
     void loadTexture(const std::wstring& path);
     void createBuffer(
@@ -133,16 +87,9 @@ private:
     std::vector<Vertex> m_vertices;
     std::vector<unsigned short> m_indices;
 
-    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
-    D3D12_INDEX_BUFFER_VIEW m_indexBufferView = {};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
-
-    float m_angle = 0.0f;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_matrixBuffer;
-    MatrixBuffer *m_matrixBufferData = nullptr;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_lightBuffer;
+    D3D12_RAYTRACING_GEOMETRY_DESC m_geometryDesc = {};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
 

@@ -22,9 +22,7 @@ Model::Model(
     loadModel(MODEL_PATH);
     createVertexBuffer();
     createIndexBuffer();
-
-    createMatrixBuffer(rc);
-    createLightBuffer();
+    createGeometryDesc();
 
     loadTexture(TEXTURE_PATH);
 
@@ -41,23 +39,9 @@ void Model::cleanup()
     m_vertexBuffer.Reset();
     m_indexBuffer.Reset();
     m_texture.Reset();
-    m_matrixBuffer.Reset();
-    m_lightBuffer.Reset();
 
     m_copyCommandQueue.Reset();
     m_copyCommandAllocator.Reset();
-}
-
-void Model::render(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList)
-{
-    m_angle += 0.01f;
-    DirectX::XMMATRIX world = DirectX::XMMatrixRotationY(m_angle);
-    m_matrixBufferData->world = world;
-
-    commandList->IASetIndexBuffer(&m_indexBufferView);
-    commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-
-    commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
 }
 
 void Model::executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const
@@ -230,12 +214,6 @@ void Model::createVertexBuffer()
 
     copyBuffer(stagingBuffer, m_vertexBuffer);
 
-    m_vertexBufferView = {
-        .BufferLocation = m_vertexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(Vertex) * m_vertices.size()),
-        .StrideInBytes = sizeof(Vertex)
-    };
-
     barrier(
         m_vertexBuffer,
         D3D12_RESOURCE_STATE_COPY_DEST,
@@ -274,12 +252,6 @@ void Model::createIndexBuffer()
 
     copyBuffer(stagingBuffer, m_indexBuffer);
 
-    m_indexBufferView = {
-        .BufferLocation = m_indexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(sizeof(unsigned short) * m_indices.size()),
-        .Format = DXGI_FORMAT_R16_UINT
-    };
-
     barrier(
         m_indexBuffer,
         D3D12_RESOURCE_STATE_COPY_DEST,
@@ -289,102 +261,24 @@ void Model::createIndexBuffer()
     m_waitForCopyResources.push_back(stagingBuffer);
 }
 
-void Model::createMatrixBuffer(RECT rc)
+void Model::createGeometryDesc()
 {
-    DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
-    DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
-        { 0.0f, 0.2f, -0.5f },
-        { 0.0f, 0.0f, 0.0f },
-        { 0.0f, 1.0f, 0.0f }
-    );
-    DirectX::XMMATRIX projection = DirectX::XMMatrixPerspectiveFovLH(
-        DirectX::XM_PIDIV2,
-        static_cast<float>(rc.right - rc.left) / static_cast<float>(rc.bottom - rc.top),
-        0.1f,
-        100.0f
-    );
-
-    createBuffer(
-        AlignCBuffer(sizeof(MatrixBuffer)),
-        &m_matrixBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    HRESULT hr = m_matrixBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_matrixBufferData));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map matrix buffer." << std::endl;
-        return;
-    }
-
-    m_matrixBufferData->world = world;
-    m_matrixBufferData->view = view;
-    m_matrixBufferData->projection = projection;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_matrixBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = AlignCBuffer(sizeof(MatrixBuffer))
+    m_geometryDesc = D3D12_RAYTRACING_GEOMETRY_DESC{
+        .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+        .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
+        .Triangles = {
+            .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
+            .VertexCount = static_cast<UINT>(m_vertices.size()),
+            .VertexBuffer = {
+                .StartAddress = m_vertexBuffer->GetGPUVirtualAddress(),
+                .StrideInBytes = sizeof(Vertex)
+            },
+            .IndexFormat = DXGI_FORMAT_R16_UINT,
+            .IndexCount = static_cast<UINT>(m_indices.size()),
+            .IndexBuffer = m_indexBuffer->GetGPUVirtualAddress(),
+            .Transform3x4 = {}
+        }
     };
-
-    m_device->CreateConstantBufferView(
-        &cbvDesc,
-        cbvHandle
-    );
-}
-
-void Model::createLightBuffer()
-{
-    DirectX::XMFLOAT3 direction{-1.0f, -3.0f, 1.0f};
-    DirectX::XMFLOAT3 ambient{0.3f, 0.3f, 0.3f};
-
-    createBuffer(
-        AlignCBuffer(sizeof(LightBuffer)),
-        &m_lightBuffer,
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COMMON
-    );
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> stagingBuffer;
-    createBuffer(
-        AlignCBuffer(sizeof(LightBuffer)),
-        &stagingBuffer,
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
-
-    LightBuffer *map = nullptr;
-    HRESULT hr = stagingBuffer->Map(0, nullptr, reinterpret_cast<void**>(&map));
-    if (FAILED(hr))
-    {
-        std::cerr << "Failed to map light buffer." << std::endl;
-        return;
-    }
-    map->direction = direction;
-    map->ambient = ambient;
-    stagingBuffer->Unmap(0, nullptr);
-
-    copyBuffer(stagingBuffer, m_lightBuffer);
-
-    m_waitForCopyResources.push_back(stagingBuffer);
-
-    barrier(
-        m_lightBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
-
-    D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
-    cbvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-        .BufferLocation = m_lightBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = AlignCBuffer(sizeof(LightBuffer))
-    };
-    m_device->CreateConstantBufferView(
-        &cbvDesc,
-        cbvHandle
-    );
 }
 
 void Model::loadTexture(const std::wstring &path)

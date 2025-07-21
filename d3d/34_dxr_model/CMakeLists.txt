@@ -8,9 +8,11 @@ add_executable(d3d_34_dxr_model
         Application.cpp
         D3DEngine.cpp
         Debug.cpp
+        Model.cpp
 )
 target_link_libraries(d3d_34_dxr_model PRIVATE d3d12 dxgi d3dcompiler)
 target_compile_definitions(d3d_34_dxr_model PRIVATE DEBUG)
+target_include_directories(d3d_34_dxr_model PRIVATE ${THIRD_PARTY_DIR})
 
 find_package(directxmath CONFIG REQUIRED)
 target_link_libraries(d3d_34_dxr_model PRIVATE Microsoft::DirectXMath)
