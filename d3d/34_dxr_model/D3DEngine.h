@@ -51,7 +51,6 @@ private:
     void createRaytracingPipelineState();
     void createShaderTable();
     void createRaytracingResources();
-    void createColorBuffer();
 
     void updateTLAS();
 
@@ -96,8 +95,6 @@ private:
         0, 2, 3
     };
 
-    const DirectX::XMFLOAT4 m_color = {1.0f, 0.0f, 0.0f, 1.0f};
-
     Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_planeVertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_planeIndexBuffer;
@@ -107,8 +104,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_tlasScratch;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceDescBuffer;
     uint32_t m_tlasSize = 0;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
