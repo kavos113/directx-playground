@@ -96,11 +96,7 @@ private:
         0, 2, 3
     };
 
-    const std::vector<DirectX::XMFLOAT4> m_colors = {
-        {1.0f, 0.0f, 0.0f, 1.0f},
-        {0.0f, 1.0f, 0.0f, 1.0f},
-        {0.0f, 0.0f, 1.0f, 1.0f},
-    };
+    const DirectX::XMFLOAT4 m_color = {1.0f, 0.0f, 0.0f, 1.0f};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_blas;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_planeVertexBuffer;
@@ -112,7 +108,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceDescBuffer;
     uint32_t m_tlasSize = 0;
 
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 3> m_colorBuffers;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_colorBuffer;
 
     Microsoft::WRL::ComPtr<ID3D12StateObject> m_raytracingPipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;

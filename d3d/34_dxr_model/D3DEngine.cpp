@@ -1354,12 +1354,8 @@ UINT align(UINT value, UINT alignment)
 // 2: miss (shadow)
 // 3: hit group (plane)
 // 4: hit group (plane shadow)
-// 5: hit group (triangle)
-// 6: hit group (triangle shadow)
-// 7: hit group (triangle2)
-// 8: hit group (triangle2 shadow)
-// 9: hit group (triangle3)
-// 10: hit group (triangle3 shadow)
+// 5: hit group (model)
+// 6: hit group (model shadow)
 void D3DEngine::createShaderTable()
 {
     Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
@@ -1375,7 +1371,7 @@ void D3DEngine::createShaderTable()
         D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + sizeof(D3D12_GPU_DESCRIPTOR_HANDLE),
         D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT
     );
-    UINT totalSize = m_shaderRecordSize * 11;
+    UINT totalSize = m_shaderRecordSize * 7;
 
     createBuffer(
         m_shaderTable.GetAddressOf(),
@@ -1443,29 +1439,26 @@ void D3DEngine::createShaderTable()
     );
     shaderTableData += m_shaderRecordSize;
 
-    // hit group
-    for (UINT i = 0; i < 3; ++i)
-    {
-        memcpy(
-            shaderTableData,
-            stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
-            D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
-        );
-        D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = m_colorBuffers[i]->GetGPUVirtualAddress();
-        memcpy(
-            shaderTableData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
-            &cbvHandle,
-            sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
-        );
-        shaderTableData += m_shaderRecordSize;
+    // model hit group
+    memcpy(
+        shaderTableData,
+        stateObjectProperties->GetShaderIdentifier(HIT_GROUP),
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+    D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = m_colorBuffer->GetGPUVirtualAddress();
+    memcpy(
+        shaderTableData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES,
+        &cbvHandle,
+        sizeof(D3D12_GPU_VIRTUAL_ADDRESS)
+    );
+    shaderTableData += m_shaderRecordSize;
 
-        memcpy(
-            shaderTableData,
-            stateObjectProperties->GetShaderIdentifier(SHADOW_HIT_GROUP),
-            D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
-        );
-        shaderTableData += m_shaderRecordSize;
-    }
+    memcpy(
+        shaderTableData,
+        stateObjectProperties->GetShaderIdentifier(SHADOW_HIT_GROUP),
+        D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+    );
+    shaderTableData += m_shaderRecordSize;
 
     m_shaderTable->Unmap(0, nullptr);
 
@@ -1577,32 +1570,29 @@ void D3DEngine::createColorBuffer()
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
 
-    for (UINT i = 0; i < m_colors.size(); ++i)
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_colorBuffer)
+    );
+    if (FAILED(hr))
     {
-        HRESULT hr = m_device->CreateCommittedResource(
-            &heapProperties,
-            D3D12_HEAP_FLAG_NONE,
-            &resourceDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&m_colorBuffers[i])
-        );
-        if (FAILED(hr))
-        {
-            std::cerr << "Failed to create color buffer resource." << std::endl;
-            return;
-        }
-
-        DirectX::XMFLOAT4 *colorMap = nullptr;
-        hr = m_colorBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
-        if (FAILED(hr))
-        {
-            std::cerr << "Failed to map color buffer." << std::endl;
-            return;
-        }
-        memcpy(colorMap, &m_colors[i], sizeof(DirectX::XMFLOAT4));
-        m_colorBuffers[i]->Unmap(0, nullptr);
+        std::cerr << "Failed to create color buffer resource." << std::endl;
+        return;
     }
+
+    DirectX::XMFLOAT4 *colorMap = nullptr;
+    hr = m_colorBuffer->Map(0, nullptr, reinterpret_cast<void**>(&colorMap));
+    if (FAILED(hr))
+    {
+        std::cerr << "Failed to map color buffer." << std::endl;
+        return;
+    }
+    memcpy(colorMap, &m_color, sizeof(DirectX::XMFLOAT4));
+    m_colorBuffer->Unmap(0, nullptr);
 }
 
 void D3DEngine::updateTLAS()
