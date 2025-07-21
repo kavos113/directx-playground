@@ -52,6 +52,8 @@ private:
     void createRaytracingResources();
     void createColorBuffer();
 
+    void updateTLAS();
+
     void beginFrame(UINT frameIndex);
     void recordCommands(UINT frameIndex);
     void endFrame(UINT frameIndex);
@@ -111,6 +113,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_planeBlas;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_tlas;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_tlasScratch;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_instanceDescBuffer;
     uint32_t m_tlasSize = 0;
 
@@ -122,6 +125,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descHeap;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_raytracingOutput;
     UINT m_shaderRecordSize = 0;
+
+    float m_angle = 0.0f;
 
     const wchar_t *SHADER_FILE = L"shader.hlsl";
     const wchar_t *RAYGEN_SHADER = L"RayGen";
