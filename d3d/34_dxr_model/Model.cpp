@@ -267,16 +267,15 @@ void Model::createGeometryDesc()
         .Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
         .Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE,
         .Triangles = {
+            .IndexFormat = DXGI_FORMAT_R16_UINT,
             .VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT,
+            .IndexCount = static_cast<UINT>(m_indices.size()),
             .VertexCount = static_cast<UINT>(m_vertices.size()),
+            .IndexBuffer = m_indexBuffer->GetGPUVirtualAddress(),
             .VertexBuffer = {
                 .StartAddress = m_vertexBuffer->GetGPUVirtualAddress(),
                 .StrideInBytes = sizeof(Vertex)
             },
-            .IndexFormat = DXGI_FORMAT_R16_UINT,
-            .IndexCount = static_cast<UINT>(m_indices.size()),
-            .IndexBuffer = m_indexBuffer->GetGPUVirtualAddress(),
-            .Transform3x4 = {}
         }
     };
 }

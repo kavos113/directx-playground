@@ -378,7 +378,7 @@ void D3DEngine::recordCommands(UINT frameIndex)
         },
         .HitGroupTable = {
             .StartAddress = m_shaderTable->GetGPUVirtualAddress() + 3 * m_shaderRecordSize,
-            .SizeInBytes = m_shaderRecordSize * 8,
+            .SizeInBytes = m_shaderRecordSize * 4,
             .StrideInBytes = m_shaderRecordSize
         },
         .Width = static_cast<UINT>(m_windowRect.right - m_windowRect.left),
@@ -697,7 +697,7 @@ void D3DEngine::createAS()
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlasInputs = {
         .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
         .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE,
-        .NumDescs = 3,
+        .NumDescs = 2,
         .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
     };
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO tlasPrebuildInfo = {};
@@ -726,11 +726,7 @@ void D3DEngine::createAS()
     );
     m_tlasSize = static_cast<uint32_t>(tlasPrebuildInfo.ResultDataMaxSizeInBytes);
 
-    std::array matrices = {
-        DirectX::XMMatrixIdentity(),
-        DirectX::XMMatrixTranslation(-1.2f, 0.0f, 0.0f),
-        DirectX::XMMatrixTranslation(1.2f, 0.0f, 0.0f)
-    };
+    DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
     D3D12_RAYTRACING_INSTANCE_DESC *instanceDesc = nullptr;
     HRESULT hr = m_instanceDescBuffer->Map(0, nullptr, reinterpret_cast<void**>(&instanceDesc));
     if (FAILED(hr))
@@ -739,24 +735,27 @@ void D3DEngine::createAS()
         return;
     }
 
+    // plane instance
     DirectX::XMFLOAT3X4 transformMatrix;
-    DirectX::XMStoreFloat3x4(&transformMatrix, matrices[0]);
+    DirectX::XMStoreFloat3x4(&transformMatrix, matrix);
     memcpy(instanceDesc[0].Transform, &transformMatrix, sizeof(transformMatrix));
     instanceDesc[0].InstanceID = 0;
     instanceDesc[0].InstanceMask = 0xFF;
     instanceDesc[0].InstanceContributionToHitGroupIndex = 0;
     instanceDesc[0].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
     instanceDesc[0].AccelerationStructure = m_planeBlas->GetGPUVirtualAddress();
-    for (size_t i = 1; i < matrices.size(); ++i)
-    {
-        DirectX::XMStoreFloat3x4(&transformMatrix, matrices[i]);
-        memcpy(instanceDesc[i].Transform, &transformMatrix, sizeof(transformMatrix));
-        instanceDesc[i].InstanceID = static_cast<UINT>(i);
-        instanceDesc[i].InstanceMask = 0xFF;
-        instanceDesc[i].InstanceContributionToHitGroupIndex = i * 2 + 2;
-        instanceDesc[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-        instanceDesc[i].AccelerationStructure = m_blas->GetGPUVirtualAddress();
-    }
+
+    matrix *= 3.0f;
+    DirectX::XMStoreFloat3x4(&transformMatrix, matrix);
+
+    // model instance
+    memcpy(instanceDesc[1].Transform, &transformMatrix, sizeof(transformMatrix));
+    instanceDesc[1].InstanceID = 1;
+    instanceDesc[1].InstanceMask = 0xFF;
+    instanceDesc[1].InstanceContributionToHitGroupIndex = 2;
+    instanceDesc[1].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+    instanceDesc[1].AccelerationStructure = m_blas->GetGPUVirtualAddress();
+
     m_instanceDescBuffer->Unmap(0, nullptr);
 
     tlasInputs.InstanceDescs = m_instanceDescBuffer->GetGPUVirtualAddress();
@@ -1600,17 +1599,12 @@ void D3DEngine::updateTLAS()
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlasInputs = {
         .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
         .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE,
-        .NumDescs = 3,
+        .NumDescs = 2,
         .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
     };
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO tlasPrebuildInfo = {};
     m_device->GetRaytracingAccelerationStructurePrebuildInfo(&tlasInputs, &tlasPrebuildInfo);
 
-    std::array matrices = {
-        DirectX::XMMatrixIdentity(),
-        DirectX::XMMatrixTranslation(-1.2f, 0.0f, 0.0f) * DirectX::XMMatrixRotationY(m_angle),
-        DirectX::XMMatrixTranslation(1.2f, 0.0f, 0.0f) * DirectX::XMMatrixRotationY(-m_angle)
-    };
     D3D12_RAYTRACING_INSTANCE_DESC *instanceDesc = nullptr;
     HRESULT hr = m_instanceDescBuffer->Map(0, nullptr, reinterpret_cast<void**>(&instanceDesc));
     if (FAILED(hr))
@@ -1619,24 +1613,28 @@ void D3DEngine::updateTLAS()
         return;
     }
 
+    DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
+
+    // plane instance
     DirectX::XMFLOAT3X4 transformMatrix;
-    DirectX::XMStoreFloat3x4(&transformMatrix, matrices[0]);
+    DirectX::XMStoreFloat3x4(&transformMatrix, matrix);
     memcpy(instanceDesc[0].Transform, &transformMatrix, sizeof(transformMatrix));
     instanceDesc[0].InstanceID = 0;
     instanceDesc[0].InstanceMask = 0xFF;
     instanceDesc[0].InstanceContributionToHitGroupIndex = 0;
     instanceDesc[0].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
     instanceDesc[0].AccelerationStructure = m_planeBlas->GetGPUVirtualAddress();
-    for (size_t i = 1; i < matrices.size(); ++i)
-    {
-        DirectX::XMStoreFloat3x4(&transformMatrix, matrices[i]);
-        memcpy(instanceDesc[i].Transform, &transformMatrix, sizeof(transformMatrix));
-        instanceDesc[i].InstanceID = static_cast<UINT>(i);
-        instanceDesc[i].InstanceMask = 0xFF;
-        instanceDesc[i].InstanceContributionToHitGroupIndex = i * 2 + 2;
-        instanceDesc[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-        instanceDesc[i].AccelerationStructure = m_blas->GetGPUVirtualAddress();
-    }
+
+    matrix *= DirectX::XMMatrixRotationY(m_angle) * 3.0f;
+    DirectX::XMStoreFloat3x4(&transformMatrix, matrix);
+
+    // model instance
+    memcpy(instanceDesc[1].Transform, &transformMatrix, sizeof(transformMatrix));
+    instanceDesc[1].InstanceID = 1;
+    instanceDesc[1].InstanceMask = 0xFF;
+    instanceDesc[1].InstanceContributionToHitGroupIndex = 2;
+    instanceDesc[1].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+    instanceDesc[1].AccelerationStructure = m_blas->GetGPUVirtualAddress();
     m_instanceDescBuffer->Unmap(0, nullptr);
 
     tlasInputs.InstanceDescs = m_instanceDescBuffer->GetGPUVirtualAddress();

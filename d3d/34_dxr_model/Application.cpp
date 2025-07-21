@@ -1,8 +1,16 @@
 #include "Application.h"
 
+#include <stdexcept>
+
 Application::Application()
     : m_hwnd(nullptr)
 {
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to initialize COM library.");
+    }
+
     WNDCLASSEX wc = {
         .cbSize = sizeof(WNDCLASSEX),
         .style = CS_HREDRAW | CS_VREDRAW,

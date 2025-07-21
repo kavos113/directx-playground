@@ -17,6 +17,9 @@ target_include_directories(d3d_34_dxr_model PRIVATE ${THIRD_PARTY_DIR})
 find_package(directxmath CONFIG REQUIRED)
 target_link_libraries(d3d_34_dxr_model PRIVATE Microsoft::DirectXMath)
 
+find_package(directxtex CONFIG REQUIRED)
+target_link_libraries(d3d_34_dxr_model PRIVATE Microsoft::DirectXTex)
+
 find_package(directx-dxc CONFIG REQUIRED)
 target_link_libraries(d3d_34_dxr_model PRIVATE Microsoft::DirectXShaderCompiler)
 
