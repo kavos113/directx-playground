@@ -560,3 +560,62 @@ void Model::barrier(
         }
     );
 }
+
+void Model::createView()
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_descHeap->GetCPUDescriptorHandleForHeapStart();
+    srvHandle.ptr += 2 * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC vertexDesc = {
+        .Format = DXGI_FORMAT_R32_TYPELESS,
+        .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Buffer = {
+            .FirstElement = 0,
+            .NumElements = static_cast<UINT>(m_vertices.size()) * sizeof(Vertex) / sizeof(float),
+            .StructureByteStride = 0,
+            .Flags = D3D12_BUFFER_SRV_FLAG_RAW
+        }
+    };
+    m_device->CreateShaderResourceView(
+        m_vertexBuffer.Get(),
+        &vertexDesc,
+        srvHandle
+    );
+
+    srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC indexDesc = {
+        .Format = DXGI_FORMAT_R16_TYPELESS,
+        .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Buffer = {
+            .FirstElement = 0,
+            .NumElements = static_cast<UINT>(m_indices.size()) * sizeof(unsigned short) / sizeof(float),
+            .StructureByteStride = 0,
+            .Flags = D3D12_BUFFER_SRV_FLAG_RAW
+        }
+    };
+    m_device->CreateShaderResourceView(
+        m_indexBuffer.Get(),
+        &indexDesc,
+        srvHandle
+    );
+
+    srvHandle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC textureDesc = {
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Texture2D = {
+            .MostDetailedMip = 0,
+            .MipLevels = 1,
+            .PlaneSlice = 0,
+            .ResourceMinLODClamp = 0.0f
+        }
+    };
+    m_device->CreateShaderResourceView(
+        m_texture.Get(),
+        &textureDesc,
+        srvHandle
+    );
+}

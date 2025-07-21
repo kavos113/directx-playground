@@ -19,6 +19,8 @@ public:
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descHeap,
         RECT rc
     );
+    void createView();
+
     void cleanup();
     void executeBarrier(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) const;
 

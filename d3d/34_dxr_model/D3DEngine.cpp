@@ -33,6 +33,7 @@ D3DEngine::D3DEngine(HWND hwnd)
     createAS();
     createRaytracingPipelineState();
     createRaytracingResources();
+    m_model->createView();
     createColorBuffer();
     createShaderTable();
 }
@@ -786,19 +787,24 @@ void D3DEngine::createAS()
     m_blas->SetName(L"Bottom Level Acceleration Structure");
 }
 
+// 1 dxil library
+// 1 hit group
+// 1 hit group(plane)
+// 1 hit group(shadow)
+// 2 shader config + association
+// 1 pipeline config
+// 1 global root signature
+// 2 local root signature(model hit group) + association
+// 2 local root signature(raygen, shadow, miss, plane) + association  (<- empty signature)
+//
+// root signature layout
+// global
+// | tlas(t) | output(u) |
+//
+// local
+// | vertex(t) | index(t) | texture(t) |
 void D3DEngine::createRaytracingPipelineState()
 {
-    // 1 dxil library
-    // 1 hit group
-    // 1 hit group(plane)
-    // 1 hit group(shadow)
-    // 2 shader config + association
-    // 1 pipeline config
-    // 1 global root signature
-    // 2 local root signature(raygen) + association
-    // 2 local root signature(hit group) + association
-    // 2 local root signature(plane hit group) + association
-    // 2 local root signature(shadow, miss) + association
     std::array<D3D12_STATE_SUBOBJECT, 16> subobjects = {};
     int index = 0;
 
@@ -1465,9 +1471,11 @@ void D3DEngine::createShaderTable()
 
 void D3DEngine::createRaytracingResources()
 {
+    // layout
+    // | tlas(t) | output(u) | vertex(t) | index(t) | texture(t) |
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 2, // | tlas | output |
+        .NumDescriptors = 5,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         .NodeMask = 0
     };
