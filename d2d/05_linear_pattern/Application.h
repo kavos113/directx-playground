@@ -45,6 +45,8 @@ private:
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_brush;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> m_greenBrush;
     Microsoft::WRL::ComPtr<ID2D1StrokeStyle> m_strokeStyle;
+
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> m_linearGradientBrush;
 };
 
 

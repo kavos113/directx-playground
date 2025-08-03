@@ -195,6 +195,37 @@ void Application::createResources()
         MessageBox(nullptr, L"Failed to create D2D stroke style", L"Error", MB_OK | MB_ICONERROR);
         return;
     }
+
+    Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> gradientStops;
+    std::array<D2D1_GRADIENT_STOP, 2> stops = {
+        { { 0.0f, D2D1::ColorF(D2D1::ColorF::Red) },
+          { 1.0f, D2D1::ColorF(D2D1::ColorF::Yellow) } }
+    };
+    hr = m_d2dContext->CreateGradientStopCollection(
+        stops.data(),
+        stops.size(),
+        &gradientStops
+    );
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D gradient stop collection", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    hr = m_d2dContext->CreateLinearGradientBrush(
+        D2D1::LinearGradientBrushProperties(
+            D2D1::Point2F(100, 100),
+            D2D1::Point2F(300, 300)
+        ),
+        gradientStops.Get(),
+        &m_linearGradientBrush
+    );
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D linear gradient brush", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
 }
 
 void Application::onPaint()
@@ -205,7 +236,7 @@ void Application::onPaint()
     m_d2dContext->BeginDraw();
     m_d2dContext->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
 
-    m_d2dContext->FillRectangle(D2D1::RectF(100, 100, 300, 300), m_brush.Get());
+    m_d2dContext->FillRectangle(D2D1::RectF(100, 100, 300, 300), m_linearGradientBrush.Get());
     m_d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(400, 200), 50, 50), m_brush.Get());
     m_d2dContext->FillRoundedRectangle(
         D2D1::RoundedRect(D2D1::RectF(500, 100, 700, 300), 40, 20),
