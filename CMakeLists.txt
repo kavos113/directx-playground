@@ -12,6 +12,7 @@ add_subdirectory(d2d/02_device_context)
 add_subdirectory(d2d/03_draw_primitive_geometry)
 add_subdirectory(d2d/04_path_geometry)
 add_subdirectory(d2d/05_linear_pattern)
+add_subdirectory(d2d/06_radical_pattern)
 
 add_subdirectory(d3d/01_hello_world)
 add_subdirectory(d3d/02_debug_layer)

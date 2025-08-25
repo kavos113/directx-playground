@@ -214,20 +214,35 @@ void Application::createResources()
         return;
     }
 
-    hr = m_d2dContext->CreateLinearGradientBrush(
-        D2D1::LinearGradientBrushProperties(
-            D2D1::Point2F(0, 0), // Start point
-            D2D1::Point2F(200, 600) // End point
+    hr = m_d2dContext->CreateRadialGradientBrush(
+        D2D1::RadialGradientBrushProperties(
+            D2D1::Point2F(200, 200),
+            D2D1::Point2F(0, 0),
+            100, 100
         ),
         gradientStops.Get(),
-        &m_linearGradientBrush
+        &m_radialGradientBrush
     );
     if (FAILED(hr))
     {
-        MessageBox(nullptr, L"Failed to create D2D linear gradient brush", L"Error", MB_OK | MB_ICONERROR);
+        MessageBox(nullptr, L"Failed to create D2D radical gradient brush", L"Error", MB_OK | MB_ICONERROR);
         return;
     }
 
+    hr = m_d2dContext->CreateRadialGradientBrush(
+        D2D1::RadialGradientBrushProperties(
+            D2D1::Point2F(500, 100),
+            D2D1::Point2F(100, 100),
+            100, 100
+        ),
+        gradientStops.Get(),
+        &m_radialGradientBrush2
+    );
+    if (FAILED(hr))
+    {
+        MessageBox(nullptr, L"Failed to create D2D radical gradient brush", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
 }
 
 void Application::onPaint()
@@ -238,34 +253,13 @@ void Application::onPaint()
     m_d2dContext->BeginDraw();
     m_d2dContext->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
 
-    // m_d2dContext->FillRectangle(D2D1::RectF(100, 100, 300, 300), m_linearGradientBrush.Get());
-    // m_d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(400, 200), 50, 50), m_brush.Get());
-    // m_d2dContext->FillRoundedRectangle(
-    //     D2D1::RoundedRect(D2D1::RectF(500, 100, 700, 300), 40, 20),
-    //     m_brush.Get()
-    // );
-    // m_d2dContext->DrawLine(
-    //     D2D1::Point2F(100, 400),
-    //     D2D1::Point2F(300, 600),
-    //     m_brush.Get(),
-    //     15.0f,
-    //     m_strokeStyle.Get()
-    // );
-    // m_d2dContext->DrawRectangle(
-    //     D2D1::RectF(400, 400, 600, 600),
-    //     m_greenBrush.Get(),
-    //     10.0f,
-    //     m_strokeStyle.Get()
-    // );
-    // m_d2dContext->DrawEllipse(
-    //     D2D1::Ellipse(D2D1::Point2F(700, 500), 50, 50),
-    //     m_greenBrush.Get(),
-    //     3.0f,
-    //     m_strokeStyle.Get()
-    // );
     m_d2dContext->FillRectangle(
-        D2D1::RectF(0, 0, 800, 600),
-        m_linearGradientBrush.Get()
+        D2D1::RectF(0, 0, 400, 600),
+        m_radialGradientBrush.Get()
+    );
+    m_d2dContext->FillRectangle(
+        D2D1::RectF(400, 0, 800, 600),
+        m_radialGradientBrush2.Get()
     );
 
     if (FAILED(m_d2dContext->EndDraw()))
