@@ -93,16 +93,14 @@ int main()
 
     std::cout << "Font count: " << fonts.size() << "\n"
                 << "Registry font count: " << fontRegistryMap.size() << std::endl;
-    for (const auto& fontName : fonts)
+    for (const auto& font : fonts)
     {
-        if (fontRegistryMap.contains(fontName))
-        {
-            wprintf(L"Font: %s, Path: %s%s\n", fontName.c_str(), fontDir.c_str(), fontRegistryMap[fontName].c_str());
-        }
-        else
-        {
-            wprintf(L"Font: %s, Path: Not found in registry\n", fontName.c_str());
-        }
+        OutputDebugStringW((L"Font: " + font + L"\n").c_str());
+    }
+
+    for (const auto& [family, path] : fontRegistryMap)
+    {
+        OutputDebugStringW((L"Registry Font: " + family + L" -> " + path + L"\n").c_str());
     }
 
     return 0;
